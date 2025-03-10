@@ -8,3 +8,10 @@
   border-radius: 10px; /* Curved edges */
   padding: 15px; /* Adds some spacing inside */
 }
+
+@media (min-width: 768px) {
+  /* Medium (md) and above */
+  .dwc {
+    max-width: 49%;
+  }
+}
