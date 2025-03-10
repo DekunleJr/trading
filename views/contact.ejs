@@ -1,0 +1,124 @@
+<%- include('includes/head.ejs') %>
+
+<body>
+  <%- include('includes/nav.ejs') %>
+  <main>
+    <div class="preloader" id="preloader">
+      <div class="loader">
+        <div class="line-scale">
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    </div>
+
+    <section class="bg-100">
+      <div class="container">
+        <div class="row align-items-stretch justify-content-center mb-4">
+          <div class="col-lg-12 mb-4 mb-lg-0">
+            <div class="card h-100">
+              <div class="card-body px-5">
+                <h2 class="mb-3">Contact Our Expert Team</h2>
+                <p class="mb-0 text-1100">
+                  Reach out to us for any inquiries related to your forex
+                  trading investments.<br />Our team is here to assist you in
+                  maximizing your returns.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4 mb-4 mb-lg-0">
+            <div class="card h-100">
+              <div class="card-body px-5">
+                <h5 class="mb-3">General Support</h5>
+                <p class="mb-0 text-1100">support@tradereturn.org</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4 mb-4 mb-lg-0">
+            <div class="card h-100">
+              <div class="card-body px-5">
+                <h5>Telegram</h5>
+                <a href="https://t.me/tradersreturns" target="_blank">
+                  <p class="mb-0 text-1100">@tradersreturns</p>
+                </a>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4 mb-4 mb-lg-0">
+            <div class="card h-100">
+              <div class="card-body px-5">
+                <h5 class="mb-3">Partnership Inquiries</h5>
+                <p class="mb-0 text-1100">partners@tradereturn.org</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-12 mb-4 mb-lg-0">
+          <div class="card h-100">
+            <div class="card-body px-5 text-center align-middle">
+              <h1 class="mb-3">Get in Touch with TradeReturn</h1>
+              <p class="mb-0 text-1100">
+                Have questions about earning a 50% monthly capital return with
+                your initial investment?<br />
+                Our team of experts is ready to provide you with all the
+                information you need.<br />
+                Contact us today to learn more about how TradeReturn can help
+                you achieve your financial goals.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body h-100 p-5">
+            <h5 class="mb-3">Write to us</h5>
+            <form action="/contact" method="POST">
+              <div class="mb-4">
+                <input
+                  class="form-control bg-white"
+                  type="text"
+                  name="name"
+                  id="name"
+                  placeholder="Your Name"
+                  required="required"
+                />
+              </div>
+              <div class="mb-4">
+                <input
+                  class="form-control bg-white"
+                  type="email"
+                  name="email"
+                  id="email"
+                  placeholder="Email"
+                  required="required"
+                />
+              </div>
+              <div class="mb-4">
+                <textarea
+                  class="form-control bg-white"
+                  rows="10"
+                  name="description"
+                  id="description"
+                  placeholder="Enter your descriptions here..."
+                  required="required"
+                ></textarea>
+              </div>
+              <div>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              </div>
+              <button class="btn btn-md-lg btn-primary" type="Submit">
+                <span class="color-white fw-600">Send Now</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <!-- end of .container-->
+    </section>
+  </main>
+  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+</body>

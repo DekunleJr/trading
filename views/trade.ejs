@@ -1,0 +1,97 @@
+<%- include('includes/head.ejs') %>
+
+<body>
+  <%- include('includes/nav.ejs') %>
+  <main class="main" id="top">
+    <div class="preloader" id="preloader">
+      <div class="loader">
+        <div class="line-scale">
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    </div>
+    <div class="container mt-8">
+      <h2 class="text-center">Trade Dashboard</h2>
+
+      <!-- Investment Summary -->
+      <div class="card bg-secondary p-3 mt-3">
+        <h4 class="text-white">
+          Total Investment: $<%= user.investmentAmount.toFixed(2) %>
+        </h4>
+        <h4 class="text-white">
+          Expected Payout: $<%= (user.investmentAmount * 1.5).toFixed(2) %>
+        </h4>
+        <h4 class="text-white">Payout Date: <%= user.payoutDate %></h4>
+      </div>
+      <div class="d-flex gap-2 mb-3">
+        <!-- Deposit Section -->
+        <div class="card bg-secondary p-3 mt-3 col-6" style="height: 250px">
+          <h4 class="text-white">Deposit Funds</h4>
+          <form action="/deposit" method="POST">
+            <input
+              type="number"
+              name="amount"
+              class="form-control my-2"
+              placeholder="Enter amount to deposit"
+              min="0.50"
+              step="0.01"
+              required
+            />
+            <select
+              name="paymentMethod"
+              id="paymentMethod"
+              class="form-select my-2"
+              required
+            >
+              <option value="fiat">Fiat (Bank Transfer, Card, PayPal)</option>
+              <option value="crypto">Crypto (BTC, USDT, ETH)</option>
+            </select>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button type="submit" class="btn btn-primary rounded-pill">
+              Deposit
+            </button>
+          </form>
+        </div>
+
+        <!-- Withdrawal Request Section -->
+        <div
+          class="card bg-secondary p-3 mt-3 mb-3 col-6"
+          style="height: 250px"
+        >
+          <h4 class="text-white">Request Withdrawal</h4>
+          <form action="/withdraw" method="POST">
+            <input
+              type="number"
+              name="amount"
+              class="form-control my-2"
+              placeholder="Enter amount to withdraw"
+              min="0.01"
+              step="0.01"
+              required
+            />
+            <input
+              type="text"
+              name="address"
+              class="form-control my-2"
+              placeholder="input your wallet address"
+              required
+            />
+            <div>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="name" value="<%= user.fulname %>" />
+              <input type="hidden" name="email" value="<%= user.email %>" />
+            </div>
+            <button type="submit" class="btn btn-danger rounded-pill">
+              Request Withdrawal
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+</body>

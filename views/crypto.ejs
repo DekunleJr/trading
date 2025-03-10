@@ -1,0 +1,53 @@
+<%- include('includes/head.ejs') %>
+
+<body>
+  <%- include('includes/nav.ejs') %>
+  <main class="d-flex flex-column min-vh-100">
+    <div class="preloader" id="preloader">
+      <div class="loader">
+        <div class="line-scale">
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    </div>
+
+    <section class="bg-white text-center">
+      <div class="container">
+        <div class="row justify-content-center">
+          <p class="mb-3">
+            Send your payemnt to this wallet, then take a screenshot and upload
+            below and wait for your payment to be confirmed
+          </p>
+          <form
+            action="/upload"
+            method="POST"
+            enctype="multipart/form-data"
+            class="custom-border p-3 col-4"
+          >
+            <div class="mb-3">
+              <p>Upload the screenshot of your payment</p>
+            </div>
+            <div class="mb-3">
+              <input
+                type="file"
+                name="image"
+                id="image"
+                accept="image/png, image/jpeg, image/jpg"
+                required
+              />
+            </div>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button type="submit" class="btn btn-primary btn-sm rounded-pill">
+              Upload
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+</body>

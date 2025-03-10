@@ -1,0 +1,10 @@
+.admin-table {
+  background-color: #2a3855;
+  color: #ffffff;
+}
+
+.custom-border {
+  border: 2px solid #243048; /* Border color */
+  border-radius: 10px; /* Curved edges */
+  padding: 15px; /* Adds some spacing inside */
+}

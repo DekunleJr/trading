@@ -1,0 +1,62 @@
+<%- include('includes/head.ejs') %>
+
+<body>
+  <%- include('includes/nav.ejs') %>
+  <main>
+    <section class="container">
+      <div class="row">
+        <div class="col-6">
+          <div class="mb-3">
+            <h2>Login</h2>
+          </div>
+          <% if (errorMessage) { %>
+          <div class="alert alert-danger">
+            <p><%= errorMessage %></p>
+          </div>
+          <% } %>
+          <form action="/login" method="POST" class="mt-4">
+            <div class="mb-3">
+              <input
+                class="form-control"
+                type="email"
+                placeholder="Enter your email"
+                name="email"
+                id="email"
+                value="<%= oldInput.email %>"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <input
+                class="form-control"
+                type="password"
+                placeholder="Enter your password"
+                name="password"
+                id="password"
+                value="<%= oldInput.email %>"
+                required
+              />
+            </div>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <div class="mb-3">
+              <button
+                class="btn btn-outline-primary rounded-pill btn-sm border-2 d-block d-lg-inline-block ms-auto my-3 my-lg-0"
+                type="submit"
+              >
+                Login
+              </button>
+            </div>
+          </form>
+        </div>
+        <div class="centered">
+          <a
+            href="/reset"
+            class="btn btn-outline-primary rounded-pill btn-sm border-2 d-block d-lg-inline-block ms-auto my-3 my-lg-0"
+            >Reset Password</a
+          >
+        </div>
+      </div>
+    </section>
+  </main>
+  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+</body>

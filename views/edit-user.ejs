@@ -1,0 +1,76 @@
+<%- include('includes/head.ejs') %>
+
+<body>
+  <%- include('includes/nav.ejs') %>
+  <main>
+    <section class="container">
+      <div class="row">
+        <div class="col-6">
+          <div class="mb-3">
+            <h2>Edit Details</h2>
+          </div>
+          <% if (errorMessage) { %>
+          <div class="alert alert-danger">
+            <p><%= errorMessage %></p>
+          </div>
+          <% } %>
+          <form action="/edit" method="POST" class="mt-4">
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <input
+                class="form-control"
+                type="email"
+                name="email"
+                id="email"
+                value="<%= user.email %>"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">InvestmentAmount</label>
+              <input
+                class="form-control"
+                type="number"
+                name="investmentAmount"
+                id="investmentAmount"
+                value="<%= user.investmentAmount %>"
+                min="0.01"
+                step="0.01"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Investment Date</label>
+              <input
+                class="form-control"
+                type="date"
+                name="investmentDate"
+                id="investmentDate"
+                value="<%= user.investmentDate %>"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Withdrawal request</label>
+              <select id="withdrawal" name="withdrawal" required>
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input type="hidden" value="<%= user._id %>" name="userId" />
+            <div class="mb-3">
+              <button
+                class="btn btn-outline-primary rounded-pill mt-3 btn-sm border-2 d-block d-lg-inline-block ms-auto my-3 my-lg-0"
+                type="submit"
+              >
+                Update
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+</body>

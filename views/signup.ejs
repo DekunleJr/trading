@@ -1,0 +1,121 @@
+<%- include('includes/head.ejs') %>
+
+<body>
+  <%- include('includes/nav.ejs') %>
+  <main>
+    <section class="container">
+      <div class="col-6">
+        <div class="mb-3">
+          <h2>Signup</h2>
+        </div>
+        <% if (errorMessage) { %>
+        <div class="alert alert-danger">
+          <p><%= errorMessage %></p>
+        </div>
+        <% } %>
+        <form action="/signup" method="POST" class="mt-4 border">
+          <div class="mb-3 col-5">
+            <label class="form-label" for="fullname">Fullname</label>
+            <br />
+            <input
+              type="text"
+              placeholder="Input your First name then last name"
+              id="fulname"
+              name="fulname"
+              value="<%= oldInput.fulname %>"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="email">Email</label>
+            <br />
+            <input
+              type="email"
+              placeholder="Input your Email"
+              id="email"
+              name="email"
+              value="<%= oldInput.email %>"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="password">Password</label>
+            <br />
+            <input
+              type="password"
+              placeholder="Input your Password"
+              id="password"
+              name="password"
+              value="<%= oldInput.password %>"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="Confirm_password">Confirm Password</label>
+            <br />
+            <input
+              type="password"
+              placeholder="Confirm password"
+              id="confirm_password"
+              name="confirm_password"
+              value="<%= oldInput.confirm_password %>"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="phone">Phone</label>
+            <br />
+            <input
+              type="tel"
+              placeholder="enter your number"
+              id="phone"
+              name="phone"
+              value="<%= oldInput.phone %>"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="investment">Any specific goals for investing</label>
+            <br />
+            <textarea
+              id="investment"
+              name="investment"
+              placeholder="Plan for retirement, saving for home, diversify my portfolio, etc"
+              rows="4"
+            ></textarea>
+            <br />
+          </div>
+
+          <div class="mb-3">
+            <label for="ref">Referral Code</label>
+            <br />
+            <input
+              type="text"
+              placeholder="Please insert a referral code if you have one"
+              id="ref"
+              name="ref"
+              value="<%= oldInput.ref %>"
+            />
+          </div>
+
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="mb-3">
+            <button
+              class="btn btn-outline-primary rounded-pill btn-sm border-2 d-block d-lg-inline-block ms-auto my-3 my-lg-0"
+              type="submit"
+            >
+              Join us
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+</body>

@@ -1,0 +1,71 @@
+<%- include('includes/head.ejs') %>
+
+<body>
+  <%- include('includes/nav.ejs') %>
+
+  <main class="d-flex flex-column min-vh-100">
+    <div class="preloader" id="preloader">
+      <div class="loader">
+        <div class="line-scale">
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 flex-grow-1">
+      <h2 class="text-center mb-4">All Users</h2>
+
+      <table class="table table-bordered table-striped">
+        <thead class="admin-table">
+          <tr>
+            <th>#</th>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Investment</th>
+            <th>Amount</th>
+            <th>Investment Date</th>
+            <th>Withdrawal Request</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach((user, index) => { %>
+          <tr>
+            <td><%= index + 1 %></td>
+            <td><%= user.fulname %></td>
+            <td><%= user.email %></td>
+            <td>0<%= user.phone %></td>
+            <td><%= user.investment || 'N/A' %></td>
+            <td>$<%= user.investmentAmount %></td>
+            <td><%= new Date(user.investmentDate).toLocaleDateString() %></td>
+            <td><%= user.withdrawal %></td>
+            <td>
+              <a
+                href="/<%= user._id %>"
+                class="btn btn-primary btn-sm rounded-pill"
+                >Edit</a
+              >
+              <form action="/delete-user" method="POST" class="mt-1">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <input type="hidden" value="<%= user._id %>" name="userId" />
+                <button
+                  class="btn btn-danger btn-sm rounded-pill"
+                  type="submit"
+                >
+                  Delete
+                </button>
+              </form>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+</body>

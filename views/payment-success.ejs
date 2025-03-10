@@ -1,0 +1,32 @@
+<%- include('includes/head.ejs') %>
+
+<body>
+  <%- include('includes/nav.ejs') %>
+  <main class="d-flex flex-column min-vh-100">
+    <div class="preloader" id="preloader">
+      <div class="loader">
+        <div class="line-scale">
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    </div>
+
+    <section class="bg-white text-center">
+      <div class="container">
+        <div class="row">
+          <div class="col-md-12">
+            <h2>Payment Successful! ✅</h2>
+            <p>Amount Deposited: $<%= amount %></p>
+            <p>Your new balance: $<%= user.investmentAmount %></p>
+            <a href="/trade">Go to Dashboard</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+</body>
