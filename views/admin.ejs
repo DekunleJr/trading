@@ -50,7 +50,7 @@
                 class="btn btn-primary btn-sm rounded-pill"
                 >Edit</a
               >
-              <form action="/delete-user" method="POST" class="mt-1">
+              <form action="/delete-user" method="POST" class="mt-1 align">
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
                 <input type="hidden" value="<%= user._id %>" name="userId" />
                 <button

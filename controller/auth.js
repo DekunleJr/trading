@@ -10,8 +10,8 @@ const transporter = nodemailer.createTransport({
   port: 465,
   secure: true,
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.EMAIL_USER_2,
+    pass: process.env.EMAIL_PASS_2,
   },
 });
 
@@ -78,7 +78,7 @@ exports.postSignup = async (req, res, next) => {
     try {
       await transporter.sendMail({
         to: email,
-        from: process.env.EMAIL_USER,
+        from: process.env.EMAIL_USER_2,
         subject: "Signup successful",
         html: "<h1>You signed up successfully!</h1>",
       });

@@ -9,9 +9,13 @@
   padding: 15px; /* Adds some spacing inside */
 }
 
+.align {
+  display: inline-block;
+}
+
 @media (min-width: 768px) {
   /* Medium (md) and above */
   .dwc {
-    max-width: 49%;
+    max-width: calc(50% - 1rem);
   }
 }
