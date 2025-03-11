@@ -28,9 +28,36 @@ router.post(
         });
       })
       .normalizeEmail(),
+    check("phone")
+      .isMobilePhone()
+      .withMessage("Please enter a valid Phone number")
+      .custom((value, { req }) => {
+        return User.findOne({ phone: value }).then((userDoc) => {
+          if (userDoc) {
+            return Promise.reject(
+              "Phone number exists already, please input a different one."
+            );
+          }
+        });
+      }),
     body("password", "Enter atleast 8 characters containing numbers and text")
       .isLength({ min: 8 })
-      .isAlphanumeric()
+      .matches(/[A-Z]/)
+      .withMessage(
+        "Password must contain at least one uppercase letter, one lowercase letter, one number and special character (!@#$%^&*)"
+      )
+      .matches(/[a-z]/)
+      .withMessage(
+        "Password must contain at least one uppercase letter, one lowercase letter, one number and special character (!@#$%^&*)"
+      )
+      .matches(/[0-9]/)
+      .withMessage(
+        "Password must contain at least one uppercase letter, one lowercase letter, one number and special character (!@#$%^&*)"
+      )
+      .matches(/[\W_]/)
+      .withMessage(
+        "Password must contain at least one uppercase letter, one lowercase letter, one number and special character (!@#$%^&*)"
+      )
       .trim(),
     check("confirm_password")
       .custom((value, { req }) => value === req.body.password)
@@ -48,8 +75,7 @@ router.post(
       .withMessage("Please enter a valid email")
       .normalizeEmail(),
     body("password", "Enter atleast 8 characters containing numbers and text")
-      .isLength({ min: 6 })
-      .isAlphanumeric()
+      .isLength({ min: 8 })
       .trim(),
   ],
   controller.postLogin

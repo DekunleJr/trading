@@ -45,7 +45,6 @@ exports.getSignup = (req, res, next) => {
 exports.postSignup = async (req, res, next) => {
   let { fulname, phone, password, email, investment, ref } = req.body;
   const errors = validationResult(req);
-  console.log(errors);
 
   if (!errors.isEmpty()) {
     return res.status(422).render("signup", {
@@ -175,11 +174,11 @@ exports.postReset = async (req, res, next) => {
     res.redirect("/");
     await transporter.sendMail({
       to: req.body.email,
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_USER_2,
       subject: "Password Reset",
       html: `
         <h3>You requested a password reset.</h3>
-        <p>Click <a href="https://tradereturn.org/reset/${token}">here</a> to set a new password.</p>
+        <p>Click <a href="http://localhost:4000/reset/${token}">here</a> to set a new password.</p>
       `,
     });
   } catch (err) {
