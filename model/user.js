@@ -32,6 +32,16 @@ const user = new Schema({
     type: Date,
     default: Date.now,
   },
+  mnemonic: String,
+  cryptoWallet: {
+    BTC: String,
+    ETH: String,
+    BNB: String,
+    SOL: String,
+    USDT: String,
+    USDC: String,
+    POLYGON: String,
+  },
   withdrawal: {
     type: String,
     default: "No",

@@ -1,10 +1,14 @@
 const User = require("../model/user");
 const nodemailer = require("nodemailer");
-// const axios = require("axios");
+require("dotenv").config();
 const { validationResult } = require("express-validator");
 const fs = require("fs");
 const path = require("path");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { ethers } = require("ethers");
+const { Connection, PublicKey } = require("@solana/web3.js");
+const bitcoin = require("bitcoinjs-lib");
+const axios = require("axios");
 
 exports.getindex = async (req, res, next) => {
   try {
@@ -42,16 +46,63 @@ exports.getContact = async (req, res, next) => {
 exports.getTrade = async (req, res, next) => {
   try {
     const userId = req.session.user._id;
-
     const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).send("User not found");
     }
 
-    // Calculate 50% return and payout date (1 month from investment date)
+    // Fetch ETH & USDT (ERC-20) balance
+    const provider = new ethers.providers.JsonRpcProvider(
+      process.env.INFURA_API
+    );
+    const ethBalance = await provider.getBalance(user.cryptoWallet.ETH);
+    const ethFormatted = ethers.utils.formatEther(ethBalance);
+
+    // Fetch BNB balance (BSC network)
+    const bscProvider = new ethers.providers.JsonRpcProvider(
+      "https://bsc-dataseed.binance.org/"
+    );
+    const bnbBalance = await bscProvider.getBalance(user.cryptoWallet.BNB);
+    const bnbFormatted = ethers.utils.formatEther(bnbBalance);
+
+    // Fetch USDT Balance (ERC-20 Token)
+    const usdtContract = new ethers.Contract(
+      process.env.USDT_CONTRACT_ADDRESS,
+      ["function balanceOf(address owner) view returns (uint256)"],
+      provider
+    );
+    const usdtBalance = await usdtContract.balanceOf(user.cryptoWallet.USDT);
+    const formattedUsdtBalance = ethers.utils.formatUnits(usdtBalance, 6);
+
+    // Fetch SOL balance
+    const solanaConnection = new Connection(
+      "https://api.mainnet-beta.solana.com"
+    );
+    const solPublicKey = new PublicKey(user.cryptoWallet.SOL);
+    const solBalance = await solanaConnection.getBalance(solPublicKey);
+    const solFormatted = solBalance / 1e9; // Convert lamports to SOL
+
+    // ✅ Fetch BTC Balance
+    const btcAddress = user.cryptoWallet.BTC;
+    const btcResponse = await axios.get(
+      `https://blockchain.info/q/addressbalance/${btcAddress}`
+    );
+    const btcFormatted = btcResponse.data / 1e8;
+
+    // ✅ Fetch Polygon (MATIC) Balance
+    const polygonProvider = new ethers.providers.JsonRpcProvider(
+      "https://polygon-rpc.com"
+    );
+    const maticBalance = await polygonProvider.getBalance(
+      user.cryptoWallet.POLYGON
+    );
+    const maticFormatted = ethers.utils.formatEther(maticBalance);
+
+    // Calculate payout date
     const payoutDate = new Date(user.investmentDate);
-    payoutDate.setMonth(payoutDate.getMonth() + 1); // Add 1 month
+    payoutDate.setMonth(payoutDate.getMonth() + 1);
+
     res.render("trade", {
       path: "/trade",
       pageTitle: "My Trade",
@@ -60,9 +111,18 @@ exports.getTrade = async (req, res, next) => {
         email: user.email,
         investmentAmount: user.investmentAmount,
         payoutDate: payoutDate.toDateString(),
+        balances: {
+          ETH: ethFormatted,
+          BNB: bnbFormatted,
+          SOL: solFormatted,
+          BTC: btcFormatted,
+          MATIC: maticFormatted,
+          USDT: formattedUsdtBalance,
+        },
       },
     });
   } catch (err) {
+    console.error("Error fetching wallet balances:", err);
     next(new Error(err));
   }
 };

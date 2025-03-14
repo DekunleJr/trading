@@ -94,6 +94,44 @@
           </form>
         </div>
       </div>
+
+      <!-- Wallet Balance Section -->
+      <div class="card bg-primary p-3 mt-3 mb-3">
+        <h4 class="text-white">Wallet Balances</h4>
+        <ul class="list-group">
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center"
+          >
+            <strong>USDT:</strong> <span><%= user.balances.USDT %> USDT</span>
+          </li>
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center"
+          >
+            <strong>BTC:</strong> <span><%= user.balances.BTC %> BTC</span>
+          </li>
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center"
+          >
+            <strong>ETH:</strong> <span><%= user.balances.ETH %> ETH</span>
+          </li>
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center"
+          >
+            <strong>BNB:</strong> <span><%= user.balances.BNB %> BNB</span>
+          </li>
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center"
+          >
+            <strong>SOL:</strong> <span><%= user.balances.SOL %> SOL</span>
+          </li>
+          <li
+            class="list-group-item d-flex justify-content-between align-items-center"
+          >
+            <strong>POLYGON:</strong>
+            <span><%= user.balances.MATIC %> MATIC</span>
+          </li>
+        </ul>
+      </div>
     </div>
   </main>
   <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>

@@ -3,6 +3,12 @@ require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const { validationResult } = require("express-validator");
+// const { Wallet } = require("ethers");
+const { ethers } = require("ethers");
+const bitcoin = require("bitcoinjs-lib");
+const ecc = require("tiny-secp256k1");
+const ECPairFactory = require("ecpair").ECPairFactory;
+const solanaWeb3 = require("@solana/web3.js");
 const User = require("../model/user");
 
 const transporter = nodemailer.createTransport({
@@ -46,6 +52,29 @@ exports.postSignup = async (req, res, next) => {
   let { fulname, phone, password, email, investment, ref } = req.body;
   const errors = validationResult(req);
 
+  // Generate a mnemonic (seed phrase)
+  const wallet = ethers.Wallet.createRandom();
+  const mnemonic = wallet.mnemonic.phrase;
+  const hdNode = ethers.utils.HDNode.fromMnemonic(mnemonic);
+
+  // Ethereum & BNB (Both use same derivation path)
+  const ethWallet = hdNode.derivePath("m/44'/60'/0'/0/0");
+  const bnbWallet = hdNode.derivePath("m/44'/60'/0'/0/1");
+  const polygonWallet = hdNode.derivePath("m/44'/60'/0'/0/2");
+  const usdcWallet = ethWallet.address;
+
+  // Bitcoin Wallet
+  const ECPair = ECPairFactory(ecc);
+  const btcKeyPair = ECPair.makeRandom();
+  const privateKey = btcKeyPair.toWIF();
+  const { address } = bitcoin.payments.p2pkh({
+    pubkey: Buffer.from(btcKeyPair.publicKey),
+  });
+
+  // Solana Wallet
+  const solKeypair = solanaWeb3.Keypair.generate();
+  const solAddress = solKeypair.publicKey.toString();
+
   if (!errors.isEmpty()) {
     return res.status(422).render("signup", {
       path: "/signup",
@@ -68,6 +97,16 @@ exports.postSignup = async (req, res, next) => {
       email,
       investment,
       ref,
+      mnemonic,
+      cryptoWallet: {
+        BTC: address,
+        ETH: ethWallet.address,
+        BNB: bnbWallet.address,
+        SOL: solAddress,
+        USDT: ethWallet.address,
+        USDC: usdcWallet,
+        POLYGON: polygonWallet.address,
+      },
     });
 
     // Save user to database
@@ -79,7 +118,43 @@ exports.postSignup = async (req, res, next) => {
         to: email,
         from: process.env.EMAIL_USER_2,
         subject: "Signup successful",
-        html: "<h1>You signed up successfully!</h1>",
+        html: `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: auto; padding: 20px; }
+            h1 { color: #333; }
+            h3 { color: #555; }
+            p { line-height: 1.6; }
+            .wallet-info { margin-bottom: 10px; }
+            .wallet-info strong { font-weight: bold; }
+            .note { color: #777; font-style: italic; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>You signed up successfully!</h1>
+            <h3>Wallet Addresses</h3>
+            <div class="wallet-info">
+                <p><strong>USDT Wallet Address:</strong> ${ethWallet.address}</p>
+                <p><strong>USDC Wallet Address:</strong> ${ethWallet.address}</p>
+                <p><strong>ETH Wallet Address:</strong> ${ethWallet.address}</p>
+                <p><strong>BNB Wallet Address:</strong> ${bnbWallet.address}</p>
+                <p><strong>SOL Wallet Address:</strong> ${solAddress}</p>
+                <p><strong>Passphrase:</strong> ${mnemonic} <span class="note">[Please keep this safe]</span></p>
+                <p><strong>Bitcoin Wallet Address:</strong> ${address}</p>
+                <p><strong>Bitcoin Secret Key:</strong> ${privateKey} <span class="note">[Please keep this safe]</span></p>
+                <p><strong>POLYGON Wallet Address:</strong> ${polygonWallet.address}</p>
+                <p><strong>Polygon Passphrase:</strong> ${polygonWallet.mnemonic.phrase} <span class="note">[Please keep this safe]</span></p>
+            </div>
+        </div>
+    </body>
+    </html>
+  `,
       });
     } catch (emailError) {
       console.error("Error sending email:", emailError);
