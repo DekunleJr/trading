@@ -32,6 +32,6 @@ router.get("/crypto", auth, controller.getCrypto);
 
 router.post("/upload", auth, controller.postCrypto);
 
-router.get("/:userId", isAdmin, controller.getEditUser);
+router.get("/edit-user/:userId", isAdmin, controller.getEditUser);
 
 module.exports = router;

@@ -117,10 +117,13 @@ app.use("/500", errorController.get500);
 
 app.use(errorController.error);
 
-// app.use((error, req, res, next) => {
-//   res.redirect("/500");
-// });
-
+app.use((error, req, res, next) => {
+  console.error("Server Error:", error);
+  res.status(500).render("500", {
+    pageTitle: "Server Error",
+    path: "/500",
+  });
+});
 mongoose
   .connect(MONGODB_URI)
   .then((result) => {

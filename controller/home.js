@@ -111,6 +111,7 @@ exports.getTrade = async (req, res, next) => {
         email: user.email,
         investmentAmount: user.investmentAmount,
         payoutDate: payoutDate.toDateString(),
+        cryptoWallet: user.cryptoWallet,
         balances: {
           ETH: ethFormatted,
           BNB: bnbFormatted,
@@ -172,33 +173,97 @@ exports.postContact = async (req, res, next) => {
 
 exports.postWithdraw = async (req, res, next) => {
   try {
-    const { name, email, amount, address } = req.body;
-    const user = await User.findOne({ email: req.body.email });
+    const userId = req.session.user._id;
+    const {
+      amount,
+      cryptoType,
+      accountNumber,
+      bankName,
+      accountHolder,
+      withdrawalType,
+    } = req.body;
 
-    const transporter = nodemailer.createTransport({
-      host: "smtp.zoho.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER_2,
-        pass: process.env.EMAIL_PASS_2,
-      },
-    });
-    const mailOptions = {
-      from: process.env.EMAIL_USER_2,
-      to: process.env.EMAIL_USER,
-      subject: `New message from ${name}`,
-      text: `Name: ${name}\nEmail: ${email}\n\nMessage:\n The user ${name} with email ${email} is requesting to be paid ${amount} to is wallet address which is ${address}`,
-    };
-    user.withdrawal = "Yes";
-    await user.save();
-    await transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        return res.status(500).send("Failed to send message");
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      req.flash("error", "User not found");
+      return res.redirect("/trade");
+    }
+
+    const withdrawAmount = parseFloat(amount);
+
+    // Check if the user has enough balance
+    if (withdrawAmount > user.investmentAmount) {
+      req.flash("error", "Insufficient balance");
+      return res.redirect("/trade");
+    }
+
+    if (withdrawalType === "crypto") {
+      // Check if the selected crypto wallet exists
+      const walletAddress = user.cryptoWallet[cryptoType];
+      if (!walletAddress) {
+        req.flash("error", "Invalid wallet selection");
+        return res.redirect("/trade");
       }
-      res.redirect("/trade");
-    });
+
+      // Step 1: Deduct the amount from the Stripe balance
+      const transfer = await stripe.stripe.payouts.create({
+        amount: withdrawAmount * 100, // Convert to cents
+        currency: "usd",
+        destination: process.env.STRIPE_CONNECTED_ACCOUNT, // Your Stripe account
+      });
+
+      // Step 2: Deduct from user's investment
+      user.investmentAmount -= withdrawAmount;
+      await user.save();
+
+      // Step 3: Convert USD to Crypto & Send to Selected Wallet
+      const exchangeRate = await getExchangeRate("USD", cryptoType);
+      const cryptoAmount = withdrawAmount / exchangeRate;
+
+      console.log(`Sent ${cryptoAmount} ${cryptoType} to ${walletAddress}`);
+
+      return res.json({
+        success: true,
+        message: `Withdrawal successful: ${cryptoAmount} ${cryptoType} sent to ${walletAddress}`,
+      });
+    } else if (withdrawalType === "bank") {
+      // Handle Bank Transfer
+      if (!bankName || !accountNumber || !accountHolder) {
+        req.flash("error", "Bank details are required");
+        return res.redirect("/trade");
+      }
+
+      // Step 1: Deduct from user's investment
+      user.investmentAmount -= withdrawAmount;
+      user.investmentDate = new Date();
+      await user.save();
+
+      // if (process.env.BANK_TRANSFER_ACCOUNT === "") {
+      //   next(new Error());
+      // }
+
+      // Step 2: Initiate Bank Transfer (Assuming a payment gateway like Paystack, Flutterwave, or Stripe)
+      const transfer = await stripe.transfers.create({
+        amount: withdrawAmount * 100,
+        currency: "usd",
+        destination: process.env.BANK_TRANSFER_ACCOUNT, // Replace with your bank account integration
+        metadata: {
+          bank_name: bankName,
+          account_number: accountNumber,
+          account_holder: accountHolder,
+        },
+      });
+
+      console.log("Bank Transfer Successful:", transfer.id);
+
+      req.flash("success", "Withdrawal request submitted successfully!");
+    } else {
+      req.flash("error", "Invalid withdrawal type");
+      return res.redirect("/trade");
+    }
   } catch (err) {
+    console.error("Error processing withdrawal:", err);
     next(new Error(err));
   }
 };
@@ -215,8 +280,7 @@ exports.postDeleteUser = async (req, res, next) => {
     await User.findByIdAndDelete(userId);
     res.redirect("/admin");
   } catch (err) {
-    // next(new Error(err));
-    console.log(err);
+    next(new Error(err));
   }
 };
 
@@ -250,7 +314,7 @@ exports.postEditUser = async (req, res, next) => {
     res.redirect("/admin");
   } catch (err) {
     console.error("Error in editing :", err);
-    next(err); // Pass error to centralized error handling middleware
+    next(); // Pass error to centralized error handling middleware
   }
 };
 
@@ -278,7 +342,7 @@ exports.postDeposit = async (req, res, next) => {
         success_url: `${req.protocol}://${req.get(
           "host"
         )}/payment-success?amount=${amount}`,
-        cancel_url: `${req.protocol}://${req.get("host")}/deposit-cancel`,
+        cancel_url: `${req.protocol}://${req.get("host")}/`,
       });
 
       res.redirect(303, session.url);
@@ -287,7 +351,7 @@ exports.postDeposit = async (req, res, next) => {
     }
   } catch (err) {
     console.error("Deposit :", err);
-    next(err);
+    next(new Error(err));
   }
 };
 
@@ -319,7 +383,7 @@ exports.paymentSuccess = async (req, res, next) => {
 exports.getCrypto = async (req, res, next) => {
   try {
     res.render("crypto", {
-      path: "/",
+      path: "/crypto",
       pageTitle: "payment page",
     });
   } catch (err) {
@@ -410,6 +474,6 @@ exports.getEditUser = async (req, res, next) => {
       user: user,
     });
   } catch (err) {
-    next();
+    next(new Error(err));
   }
 };

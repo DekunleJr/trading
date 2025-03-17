@@ -61,11 +61,44 @@
         </div>
 
         <!-- Withdrawal Request Section -->
-        <div
-          class="card bg-primary p-3 mt-3 mb-3 col-12 col-md-6 col-lg-6 dwc"
-          style="height: 250px"
-        >
+        <div class="card bg-primary p-3 mt-3 mb-3 col-12 col-md-6 col-lg-6 dwc">
           <h4 class="text-white">Request Withdrawal</h4>
+          <!-- <form action="/withdraw" method="POST">
+            <input
+              type="number"
+              name="amount"
+              class="form-control my-2"
+              placeholder="Enter amount to withdraw"
+              min="0.01"
+              step="0.01"
+              max="<%= user.investmentAmount.toFixed(2) %>"
+              required
+            />
+            <small class="text-white"
+              >Max Withdrawal: $<%= user.investmentAmount.toFixed(2) %></small
+            >
+
+            <select name="cryptoType" class="form-select my-2" required>
+              <option value="" disabled selected>Select Wallet</option>
+              <% for (const [crypto, address] of
+              Object.entries(user.cryptoWallet)) { %> <% if (address) { %>
+              <option value="<%= crypto %>">
+                <%= crypto %> - <%= address %>
+              </option>
+              <% } %> <% } %>
+            </select>
+
+            <div>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="name" value="<%= user.fulname %>" />
+              <input type="hidden" name="email" value="<%= user.email %>" />
+            </div>
+
+            <button type="submit" class="btn btn-danger rounded-pill">
+              Request Withdrawal
+            </button>
+          </form> -->
+
           <form action="/withdraw" method="POST">
             <input
               type="number"
@@ -74,20 +107,64 @@
               placeholder="Enter amount to withdraw"
               min="0.01"
               step="0.01"
+              max="<%= user.investmentAmount.toFixed(2) %>"
               required
             />
-            <input
-              type="text"
-              name="address"
-              class="form-control my-2"
-              placeholder="input your wallet address"
+            <small class="text-white"
+              >Max Withdrawal: $<%= user.investmentAmount.toFixed(2) %></small
+            >
+
+            <!-- Select Withdrawal Type -->
+            <select
+              name="withdrawalType"
+              id="withdrawalType"
+              class="form-select my-2"
               required
-            />
-            <div>
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-              <input type="hidden" name="name" value="<%= user.fulname %>" />
-              <input type="hidden" name="email" value="<%= user.email %>" />
+            >
+              <option value="" disabled selected>Select Withdrawal Type</option>
+              <option value="crypto">Crypto Wallet</option>
+              <option value="bank">Bank Transfer</option>
+            </select>
+
+            <!-- Crypto Wallet Selection -->
+            <div id="cryptoSection" style="display: none">
+              <select name="cryptoType" class="form-select my-2">
+                <option value="" disabled selected>Select Wallet</option>
+                <% for (const [crypto, address] of
+                Object.entries(user.cryptoWallet)) { %> <% if (address) { %>
+                <option value="<%= crypto %>">
+                  <%= crypto %> - <%= address %>
+                </option>
+                <% } %> <% } %>
+              </select>
             </div>
+
+            <!-- Bank Transfer Section -->
+            <div id="bankSection" style="display: none">
+              <input
+                type="text"
+                name="bankName"
+                class="form-control my-2"
+                placeholder="Bank Name"
+              />
+              <input
+                type="number"
+                name="accountNumber"
+                class="form-control my-2"
+                placeholder="Account Number"
+              />
+              <input
+                type="text"
+                name="accountHolder"
+                class="form-control my-2"
+                placeholder="Account Holder Name"
+              />
+            </div>
+
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input type="hidden" name="name" value="<%= user.fulname %>" />
+            <input type="hidden" name="email" value="<%= user.email %>" />
+
             <button type="submit" class="btn btn-danger rounded-pill">
               Request Withdrawal
             </button>
@@ -134,5 +211,25 @@
       </div>
     </div>
   </main>
-  <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
+  <%- include('includes/footer.ejs') %>
+  <script>
+    document
+      .getElementById("withdrawalType")
+      .addEventListener("change", function () {
+        var cryptoSection = document.getElementById("cryptoSection");
+        var bankSection = document.getElementById("bankSection");
+
+        if (this.value === "crypto") {
+          cryptoSection.style.display = "block";
+          bankSection.style.display = "none";
+        } else if (this.value === "bank") {
+          cryptoSection.style.display = "none";
+          bankSection.style.display = "block";
+        } else {
+          cryptoSection.style.display = "none";
+          bankSection.style.display = "none";
+        }
+      });
+  </script>
+  <%- include('includes/end.ejs') %>
 </body>

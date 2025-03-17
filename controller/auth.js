@@ -164,7 +164,7 @@ exports.postSignup = async (req, res, next) => {
     res.redirect("/login");
   } catch (err) {
     console.error("Error in postSignup:", err);
-    next(err); // Pass error to centralized error handling middleware
+    next(new Error(err)); // Pass error to centralized error handling middleware
   }
 };
 
