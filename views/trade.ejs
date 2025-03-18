@@ -31,7 +31,7 @@
         <!-- Deposit Section -->
         <div
           class="card bg-primary p-3 mt-3 col-12 col-md-6 col-lg-6 dwc"
-          style="height: 250px"
+          style="height: 300px"
         >
           <h4 class="text-white">Deposit Funds</h4>
           <form action="/deposit" method="POST">
@@ -44,6 +44,7 @@
               step="0.01"
               required
             />
+            <small class="text-white">Payment Method</small>
             <select
               name="paymentMethod"
               id="paymentMethod"
@@ -54,7 +55,10 @@
               <option value="crypto">Crypto (BTC, USDT, ETH)</option>
             </select>
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-            <button type="submit" class="btn btn-success rounded-pill">
+            <button
+              type="submit"
+              class="btn btn-outline-dark bg-secondary rounded-pill mt-3"
+            >
               Deposit
             </button>
           </form>
@@ -63,41 +67,6 @@
         <!-- Withdrawal Request Section -->
         <div class="card bg-primary p-3 mt-3 mb-3 col-12 col-md-6 col-lg-6 dwc">
           <h4 class="text-white">Request Withdrawal</h4>
-          <!-- <form action="/withdraw" method="POST">
-            <input
-              type="number"
-              name="amount"
-              class="form-control my-2"
-              placeholder="Enter amount to withdraw"
-              min="0.01"
-              step="0.01"
-              max="<%= user.investmentAmount.toFixed(2) %>"
-              required
-            />
-            <small class="text-white"
-              >Max Withdrawal: $<%= user.investmentAmount.toFixed(2) %></small
-            >
-
-            <select name="cryptoType" class="form-select my-2" required>
-              <option value="" disabled selected>Select Wallet</option>
-              <% for (const [crypto, address] of
-              Object.entries(user.cryptoWallet)) { %> <% if (address) { %>
-              <option value="<%= crypto %>">
-                <%= crypto %> - <%= address %>
-              </option>
-              <% } %> <% } %>
-            </select>
-
-            <div>
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-              <input type="hidden" name="name" value="<%= user.fulname %>" />
-              <input type="hidden" name="email" value="<%= user.email %>" />
-            </div>
-
-            <button type="submit" class="btn btn-danger rounded-pill">
-              Request Withdrawal
-            </button>
-          </form> -->
 
           <form action="/withdraw" method="POST">
             <input
@@ -165,7 +134,10 @@
             <input type="hidden" name="name" value="<%= user.fulname %>" />
             <input type="hidden" name="email" value="<%= user.email %>" />
 
-            <button type="submit" class="btn btn-danger rounded-pill">
+            <button
+              type="submit"
+              class="btn btn-outline-light bg-primary rounded-pill mt-3"
+            >
               Request Withdrawal
             </button>
           </form>
@@ -179,35 +151,149 @@
           <li
             class="list-group-item d-flex justify-content-between align-items-center"
           >
-            <strong>USDT:</strong> <span><%= user.balances.USDT %> USDT</span>
+            <strong>USDT<span> - <%= user.cryptoWallet.USDT %></span>:</strong>
+            <span><%= user.balances.USDT %> USDT</span>
           </li>
           <li
             class="list-group-item d-flex justify-content-between align-items-center"
           >
-            <strong>BTC:</strong> <span><%= user.balances.BTC %> BTC</span>
+            <strong>BTC<span> - <%= user.cryptoWallet.BTC %>:</span></strong>
+            <span><%= user.balances.BTC %> BTC</span>
           </li>
           <li
             class="list-group-item d-flex justify-content-between align-items-center"
           >
-            <strong>ETH:</strong> <span><%= user.balances.ETH %> ETH</span>
+            <strong>ETH<span> - <%= user.cryptoWallet.ETH %>:</span></strong>
+            <span><%= user.balances.ETH %> ETH</span>
           </li>
           <li
             class="list-group-item d-flex justify-content-between align-items-center"
           >
-            <strong>BNB:</strong> <span><%= user.balances.BNB %> BNB</span>
+            <strong>BNB <span>- <%= user.cryptoWallet.BNB %>:</span></strong>
+            <span><%= user.balances.BNB %> BNB</span>
           </li>
           <li
             class="list-group-item d-flex justify-content-between align-items-center"
           >
-            <strong>SOL:</strong> <span><%= user.balances.SOL %> SOL</span>
+            <strong>SOL <span>- <%= user.cryptoWallet.SOL %>:</span></strong>
+            <span><%= user.balances.SOL %> SOL</span>
           </li>
           <li
             class="list-group-item d-flex justify-content-between align-items-center"
           >
-            <strong>POLYGON:</strong>
+            <strong
+              >POLYGON <span>- <%= user.cryptoWallet.POLYGON %>:</span></strong
+            >
             <span><%= user.balances.MATIC %> MATIC</span>
           </li>
         </ul>
+      </div>
+
+      <div class="row gap-3 mb-3 mt-3 mb-3">
+        <div class="card bg-primary p-3 mt-3 col-12 col-md-6 col-lg-6 dwc">
+          <h4 class="text-white">Swap Crypto</h4>
+          <form action="/api/trade/swap" method="POST">
+            <div class="row">
+              <div class="col-6">
+                <label class="text-white">From:</label>
+                <select name="fromCrypto" class="form-select my-2">
+                  <% for (const [crypto, balance] of
+                  Object.entries(user.cryptoWallet)) { %>
+                  <option value="<%= crypto %>"><%= crypto %></option>
+                  <% } %>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="text-white">To:</label>
+                <select name="toCrypto" class="form-select my-2">
+                  <% for (const crypto of ["BTC", "ETH", "USDT", "BNB", "SOL",
+                  "MATIC"]) { %>
+                  <option value="<%= crypto %>"><%= crypto %></option>
+                  <% } %>
+                </select>
+              </div>
+            </div>
+
+            <input
+              type="number"
+              name="amount"
+              class="form-control my-2"
+              placeholder="Amount"
+              step="0.0001"
+              required
+            />
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button
+              type="submit"
+              class="btn btn-outline-light bg-primary mt-3 rounded-pill mt-3"
+            >
+              Swap
+            </button>
+          </form>
+        </div>
+
+        <div class="card bg-primary p-3 mt-3 col-12 col-md-6 col-lg-6 dwc">
+          <h4 class="text-white">Sell Crypto</h4>
+          <form action="/api/trade/sell" method="POST">
+            <div class="row">
+              <div class="col-6">
+                <!-- <label class="text-white">Select Crypto:</label> -->
+                <select name="cryptoType" class="form-select my-2">
+                  <% for (const [crypto, balance] of
+                  Object.entries(user.cryptoWallet)) { %>
+                  <option value="<%= crypto %>"><%= crypto %></option>
+                  <% } %>
+                </select>
+              </div>
+              <div class="col-6">
+                <input
+                  type="number"
+                  name="amount"
+                  class="form-control my-2"
+                  placeholder="Amount to Sell"
+                  step="0.0001"
+                  required
+                />
+              </div>
+
+              <div class="col-6">
+                <input
+                  type="text"
+                  name="bankName"
+                  class="form-control my-2"
+                  placeholder="Bank Name"
+                />
+              </div>
+              <div class="col-6">
+                <input
+                  type="number"
+                  name="accountNumber"
+                  class="form-control my-2"
+                  placeholder="Account Number"
+                />
+              </div>
+              <div class="col-12">
+                <input
+                  type="text"
+                  name="accountHolder"
+                  class="form-control my-2"
+                  placeholder="Account Holder Name"
+                />
+              </div>
+            </div>
+            <!-- <label class="text-white">Withdrawal Type:</label>
+            <select name="withdrawalType" class="form-select my-2">
+              <option value="stripe">Stripe (Bank Transfer)</option>
+            </select> -->
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button
+              type="submit"
+              class="btn btn-outline-light bg-primary rounded-pill mt-3"
+            >
+              Sell
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   </main>
