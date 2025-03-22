@@ -4,11 +4,17 @@ require("dotenv").config();
 const { validationResult } = require("express-validator");
 const fs = require("fs");
 const path = require("path");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+// const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { ethers } = require("ethers");
 const { Connection, PublicKey } = require("@solana/web3.js");
-const bitcoin = require("bitcoinjs-lib");
+// const bitcoin = require("bitcoinjs-lib");
 const axios = require("axios");
+
+// Import Crypto Cloud
+const cryptoCloud = axios.create({
+  baseURL: "https://api.cryptocloud.plus/v1",
+  headers: { Authorization: `Token ${process.env.CRYPTOCLOUD_API_KEY}` },
+});
 
 exports.getindex = async (req, res, next) => {
   try {
@@ -102,10 +108,12 @@ exports.getTrade = async (req, res, next) => {
     // Calculate payout date
     const payoutDate = new Date(user.investmentDate);
     payoutDate.setMonth(payoutDate.getMonth() + 1);
+    const message = req.flash("error")[0] || null;
 
     res.render("trade", {
       path: "/trade",
       pageTitle: "My Trade",
+      errorMessage: message,
       user: {
         fulname: user.fulname,
         email: user.email,
@@ -174,96 +182,33 @@ exports.postContact = async (req, res, next) => {
 exports.postWithdraw = async (req, res, next) => {
   try {
     const userId = req.session.user._id;
-    const {
-      amount,
-      cryptoType,
-      accountNumber,
-      bankName,
-      accountHolder,
-      withdrawalType,
-    } = req.body;
-
-    // Find the user
+    const { amount } = req.body;
+    const cryptoType = "USDT";
     const user = await User.findById(userId);
     if (!user) {
       req.flash("error", "User not found");
       return res.redirect("/trade");
     }
-
-    const withdrawAmount = parseFloat(amount);
-
-    // Check if the user has enough balance
-    if (withdrawAmount > user.investmentAmount) {
+    const walletAddress = user.cryptoWallet.USDT;
+    if (parseFloat(amount) > user.investmentAmount) {
       req.flash("error", "Insufficient balance");
       return res.redirect("/trade");
     }
-
-    if (withdrawalType === "crypto") {
-      // Check if the selected crypto wallet exists
-      const walletAddress = user.cryptoWallet[cryptoType];
-      if (!walletAddress) {
-        req.flash("error", "Invalid wallet selection");
-        return res.redirect("/trade");
-      }
-
-      // Step 1: Deduct the amount from the Stripe balance
-      const transfer = await stripe.stripe.payouts.create({
-        amount: withdrawAmount * 100, // Convert to cents
-        currency: "usd",
-        destination: process.env.STRIPE_CONNECTED_ACCOUNT, // Your Stripe account
-      });
-
-      // Step 2: Deduct from user's investment
-      user.investmentAmount -= withdrawAmount;
-      await user.save();
-
-      // Step 3: Convert USD to Crypto & Send to Selected Wallet
-      const exchangeRate = await getExchangeRate("USD", cryptoType);
-      const cryptoAmount = withdrawAmount / exchangeRate;
-
-      console.log(`Sent ${cryptoAmount} ${cryptoType} to ${walletAddress}`);
-
-      return res.json({
-        success: true,
-        message: `Withdrawal successful: ${cryptoAmount} ${cryptoType} sent to ${walletAddress}`,
-      });
-    } else if (withdrawalType === "bank") {
-      // Handle Bank Transfer
-      if (!bankName || !accountNumber || !accountHolder) {
-        req.flash("error", "Bank details are required");
-        return res.redirect("/trade");
-      }
-
-      // Step 1: Deduct from user's investment
-      user.investmentAmount -= withdrawAmount;
-      user.investmentDate = new Date();
-      await user.save();
-
-      // if (process.env.BANK_TRANSFER_ACCOUNT === "") {
-      //   next(new Error());
-      // }
-
-      // Step 2: Initiate Bank Transfer (Assuming a payment gateway like Paystack, Flutterwave, or Stripe)
-      const transfer = await stripe.transfers.create({
-        amount: withdrawAmount * 100,
-        currency: "usd",
-        destination: process.env.BANK_TRANSFER_ACCOUNT, // Replace with your bank account integration
-        metadata: {
-          bank_name: bankName,
-          account_number: accountNumber,
-          account_holder: accountHolder,
-        },
-      });
-
-      console.log("Bank Transfer Successful:", transfer.id);
-
-      req.flash("success", "Withdrawal request submitted successfully!");
-    } else {
-      req.flash("error", "Invalid withdrawal type");
-      return res.redirect("/trade");
-    }
+    const response = await cryptoCloud.post("/payout/create", {
+      amount,
+      currency: cryptoType,
+      wallet: walletAddress,
+      order_id: userId,
+    });
+    user.investmentAmount -= parseFloat(amount);
+    await user.save();
+    res.json({
+      success: true,
+      message: "Withdrawal initiated",
+      payoutId: response.data.id,
+    });
   } catch (err) {
-    console.error("Error processing withdrawal:", err);
+    console.error("Withdrawal Error:", err);
     next(new Error(err));
   }
 };
@@ -319,40 +264,46 @@ exports.postEditUser = async (req, res, next) => {
 };
 
 exports.postDeposit = async (req, res, next) => {
-  const { amount, paymentMethod } = req.body;
-  // const user = req.session.user;
-
+  const { amount } = req.body;
   try {
-    if (paymentMethod === "fiat") {
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "payment",
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: "Account Deposit",
-              },
-              unit_amount: amount * 100, // Convert to cents
-            },
-            quantity: 1,
-          },
-        ],
-        success_url: `${req.protocol}://${req.get(
-          "host"
-        )}/payment-success?amount=${amount}`,
-        cancel_url: `${req.protocol}://${req.get("host")}/`,
-      });
+    const requestData = {
+      amount,
+      currency: "USDT",
+      order_id: req.session.user._id,
+      project_id: process.env.CRYPTOCLOUD_PROJECT_ID,
+      success_url: `${req.protocol}://${req.get(
+        "host"
+      )}/payment-success?amount=${amount}`,
+      fail_url: `${req.protocol}://${req.get("host")}/`,
+    };
 
-      res.redirect(303, session.url);
-    } else {
-      res.redirect("/crypto");
-    }
+    console.log("Sending request to Crypto Cloud:", requestData);
+
+    const response = await cryptoCloud.post("/invoice/create", requestData);
+    console.log("Crypto Cloud Response:", response.data);
+
+    res.redirect(response.data.url);
   } catch (err) {
-    console.error("Deposit :", err);
+    console.error("Deposit Error Response:", err.response?.data || err);
     next(new Error(err));
   }
+
+  // try {
+  //   const response = await cryptoCloud.post("/invoice/create", {
+  //     amount,
+  //     currency: "USDT", // Change based on accepted fiat/crypto
+  //     order_id: req.session.user._id,
+  //     project_id: process.env.CRYPTOCLOUD_PROJECT_ID,
+  //     success_url: `${req.protocol}://${req.get(
+  //       "host"
+  //     )}/payment-success?amount=${amount}`,
+  //     fail_url: `${req.protocol}://${req.get("host")}/`,
+  //   });
+  //   res.redirect(response.data.url);
+  // } catch (err) {
+  //   console.error("Deposit Error:", err);
+  //   next(new Error(err));
+  // }
 };
 
 exports.paymentSuccess = async (req, res, next) => {
@@ -475,5 +426,101 @@ exports.getEditUser = async (req, res, next) => {
     });
   } catch (err) {
     next(new Error(err));
+  }
+};
+
+exports.swapCrypto = async (req, res, next) => {
+  try {
+    const { fromCrypto, toCrypto, amount } = req.body;
+    const user = await User.findById(req.session.user._id);
+
+    if (!user) {
+      req.flash("error", "User not found");
+      return res.status(400).redirect("/trade");
+    }
+
+    // Check if user has wallet addresses for both cryptos
+    if (!user.cryptoWallet[fromCrypto] || !user.cryptoWallet[toCrypto]) {
+      req.flash("error", "Wallet address not found for selected crypto");
+      return res.status(400).redirect("/trade");
+    }
+
+    const fromWallet = user.cryptoWallet[fromCrypto]; // Sender's wallet address
+    const toWallet = user.cryptoWallet[toCrypto]; // Receiver's wallet address
+
+    // Fetch exchange rate from Binance API
+    const exchangeRateResponse = await axios.get(
+      `https://api.binance.com/api/v3/ticker/price?symbol=${fromCrypto}${toCrypto}`
+    );
+
+    if (!exchangeRateResponse.data.price) {
+      req.flash("error", "Failed to fetch exchange rate");
+      return res.status(500).redirect("/trade");
+    }
+
+    const exchangeRate = parseFloat(exchangeRateResponse.data.price);
+    const convertedAmount = amount * exchangeRate;
+
+    // Process swap using Crypto Cloud (including wallet addresses)
+    const response = await cryptoCloud.post("/swap", {
+      from: fromCrypto,
+      to: toCrypto,
+      amount,
+      from_wallet: fromWallet, // User's wallet for deduction
+      to_wallet: toWallet, // User's wallet for receiving converted crypto
+      order_id: user._id,
+    });
+
+    if (response.data.status !== "success") {
+      req.flash("error", "Crypto swap failed");
+      return res.status(500).redirect("/trade");
+    }
+
+    req.flash(
+      "success",
+      `Successfully swapped ${amount} ${fromCrypto} to ${convertedAmount.toFixed(
+        6
+      )} ${toCrypto}`
+    );
+    res.redirect("/trade");
+  } catch (err) {
+    next(new Error(err));
+  }
+};
+
+exports.sendCrypto = async (req, res, next) => {
+  try {
+    const { cryptoType, amount, walletAddress, sendCryptoType } = req.body;
+    const user = await User.findById(req.session.user._id);
+
+    if (!user) {
+      req.flash("error", "User not found");
+      return res.redirect("/trade");
+    }
+
+    if (!user.cryptoWallet[cryptoType]) {
+      req.flash("error", "No wallet address found for ${cryptoType}");
+      return res.redirect("/trade");
+    }
+
+    // Process transaction via Crypto Cloud
+    const response = await cryptoCloud.post("/payout/create", {
+      amount,
+      currency: sendCryptoType,
+      wallet: walletAddress,
+      order_id: user._id,
+    });
+
+    if (response.data.status !== "success") {
+      req.flash("error", "Crypto transfer failed");
+      return res.redirect("/trade");
+    }
+
+    req.flash("success", `Sent ${amount} ${cryptoType} to ${walletAddress}`);
+    res.redirect("/trade");
+  } catch (error) {
+    console.error("Send Crypto Error:", error);
+    req.flash("error", "Transaction error");
+    next(new Error(error));
   }
 };

@@ -34,4 +34,8 @@ router.post("/upload", auth, controller.postCrypto);
 
 router.get("/edit-user/:userId", isAdmin, controller.getEditUser);
 
+router.post("/swap", auth, controller.swapCrypto);
+
+router.post("/send", auth, controller.sendCrypto);
+
 module.exports = router;
