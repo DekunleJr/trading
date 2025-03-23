@@ -12,6 +12,7 @@ const flash = require("connect-flash");
 const multer = require("multer");
 const compression = require("compression");
 const morgan = require("morgan");
+require("./cron/investmentCron");
 
 const errorController = require("./controller/error");
 const User = require("./model/user.js");
