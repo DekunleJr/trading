@@ -13,6 +13,11 @@
   display: inline-block;
 }
 
+.sty {
+  background: #ffffff;
+  opacity: 0.8;
+}
+
 @media (min-width: 768px) {
   /* Medium (md) and above */
   .dwc {
