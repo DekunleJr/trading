@@ -24,3 +24,9 @@
     max-width: calc(50% - 1rem);
   }
 }
+
+@media (max-width: 767px) {
+  .ad {
+    display: none;
+  }
+}
