@@ -269,7 +269,7 @@ exports.postDeposit = async (req, res, next) => {
     const requestData = {
       amount,
       currency: "USDT",
-      order_id: req.session.user._id,
+      order_id: req.session.user._id.toString(),
       project_id: process.env.CRYPTOCLOUD_PROJECT_ID,
       success_url: `${req.protocol}://${req.get(
         "host"

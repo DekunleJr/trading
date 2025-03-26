@@ -10,8 +10,6 @@ router.get("/contact", controller.getContact);
 
 router.get("/service", controller.getService);
 
-router.get("/contact", controller.getContact);
-
 router.get("/trade", auth, controller.getTrade);
 
 router.get("/admin", isAdmin, controller.getAdmin);
