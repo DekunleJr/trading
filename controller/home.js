@@ -450,7 +450,7 @@ exports.swapCrypto = async (req, res, next) => {
 
     // Fetch exchange rate from Binance API
     const exchangeRateResponse = await axios.get(
-      `https://api.binance.com/api/v3/ticker/price?symbol=${fromCrypto}${toCrypto}`
+      `https://api.binance.us/api/v3/ticker/price?symbol=${fromCrypto}${toCrypto}`
     );
 
     if (!exchangeRateResponse.data.price) {
