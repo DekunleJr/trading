@@ -3,7 +3,6 @@ require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const { validationResult } = require("express-validator");
-// const { Wallet } = require("ethers");
 const { ethers } = require("ethers");
 const bitcoin = require("bitcoinjs-lib");
 const ecc = require("tiny-secp256k1");
@@ -51,6 +50,12 @@ exports.getSignup = (req, res, next) => {
 exports.postSignup = async (req, res, next) => {
   let { fulname, phone, password, email, investment, ref } = req.body;
   const errors = validationResult(req);
+  const encryptPrivateKey = (key) => {
+    const cipher = crypto.createCipher("aes-256-cbc", process.env.SECRET_KEY);
+    let encrypted = cipher.update(key, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    return encrypted;
+  };
 
   // Generate a mnemonic (seed phrase)
   const wallet = ethers.Wallet.createRandom();
@@ -73,6 +78,7 @@ exports.postSignup = async (req, res, next) => {
 
   // Solana Wallet
   const solKeypair = solanaWeb3.Keypair.generate();
+  const solPrivateKey = Buffer.from(solKeypair.secretKey).toString("hex");
   const solAddress = solKeypair.publicKey.toString();
 
   if (!errors.isEmpty()) {
@@ -106,6 +112,10 @@ exports.postSignup = async (req, res, next) => {
         USDT: ethWallet.address,
         USDC: usdcWallet,
         POLYGON: polygonWallet.address,
+      },
+      privateKeys: {
+        btc: encryptPrivateKey(privateKey),
+        sol: encryptPrivateKey(solPrivateKey),
       },
     });
 
@@ -144,8 +154,9 @@ exports.postSignup = async (req, res, next) => {
                 <p><strong>USDC Wallet Address:</strong> ${ethWallet.address}</p>
                 <p><strong>ETH Wallet Address:</strong> ${ethWallet.address}</p>
                 <p><strong>BNB Wallet Address:</strong> ${bnbWallet.address}</p>
-                <p><strong>SOL Wallet Address:</strong> ${solAddress}</p>
                 <p><strong>Passphrase:</strong> ${mnemonic} <span class="note">[Please keep this safe]</span></p>
+                <p><strong>SOL Wallet Address:</strong> ${solAddress}</p>
+                <p><strong>SOL Secret Key:</strong> ${solPrivateKey} <span class="note">[Please keep this safe]</span></p>
                 <p><strong>Bitcoin Wallet Address:</strong> ${address}</p>
                 <p><strong>Bitcoin Secret Key:</strong> ${privateKey} <span class="note">[Please keep this safe]</span></p>
                 <p><strong>POLYGON Wallet Address:</strong> ${polygonWallet.address}</p>

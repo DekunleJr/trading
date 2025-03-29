@@ -3,6 +3,7 @@ const router = express.Router();
 const controller = require("../controller/home");
 const auth = require("../controller/isAuth");
 const isAdmin = require("../controller/isAdmin");
+const payment = require("../controller/payment");
 
 router.get("/", controller.getindex);
 
@@ -32,8 +33,8 @@ router.post("/upload", auth, controller.postCrypto);
 
 router.get("/edit-user/:userId", isAdmin, controller.getEditUser);
 
-router.post("/swap", auth, controller.swapCrypto);
+router.post("/swap", auth, payment.swapCrypto);
 
-router.post("/send", auth, controller.sendCrypto);
+router.post("/send", auth, payment.sendCrypto);
 
 module.exports = router;

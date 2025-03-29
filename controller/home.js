@@ -4,17 +4,14 @@ require("dotenv").config();
 const { validationResult } = require("express-validator");
 const fs = require("fs");
 const path = require("path");
-// const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { ethers } = require("ethers");
 const { Connection, PublicKey } = require("@solana/web3.js");
 // const bitcoin = require("bitcoinjs-lib");
+const { ECPairFactory } = require("ecpair");
+const ecc = require("tiny-secp256k1");
 const axios = require("axios");
 
-// Import Crypto Cloud
-const cryptoCloud = axios.create({
-  baseURL: "https://api.cryptocloud.plus/v1",
-  headers: { Authorization: `Token ${process.env.CRYPTOCLOUD_API_KEY}` },
-});
+const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
 
 exports.getindex = async (req, res, next) => {
   try {
@@ -58,56 +55,81 @@ exports.getTrade = async (req, res, next) => {
       return res.status(404).send("User not found");
     }
 
+    const balances = {};
+
     // Fetch ETH & USDT (ERC-20) balance
     const provider = new ethers.providers.JsonRpcProvider(
       process.env.INFURA_API
     );
-    const ethBalance = await provider.getBalance(user.cryptoWallet.ETH);
-    const ethFormatted = ethers.utils.formatEther(ethBalance);
+    if (user.cryptoWallet.ETH) {
+      const ethBalance = await provider.getBalance(user.cryptoWallet.ETH);
+      balances.ETH = parseFloat(ethers.utils.formatEther(ethBalance));
+    }
 
     // Fetch BNB balance (BSC network)
     const bscProvider = new ethers.providers.JsonRpcProvider(
       "https://bsc-dataseed.binance.org/"
     );
-    const bnbBalance = await bscProvider.getBalance(user.cryptoWallet.BNB);
-    const bnbFormatted = ethers.utils.formatEther(bnbBalance);
+    if (user.cryptoWallet.BNB) {
+      const bnbBalance = await bscProvider.getBalance(user.cryptoWallet.BNB);
+      balances.BNB = parseFloat(ethers.utils.formatEther(bnbBalance));
+    }
 
     // Fetch USDT Balance (ERC-20 Token)
-    const usdtContract = new ethers.Contract(
-      process.env.USDT_CONTRACT_ADDRESS,
-      ["function balanceOf(address owner) view returns (uint256)"],
-      provider
-    );
-    const usdtBalance = await usdtContract.balanceOf(user.cryptoWallet.USDT);
-    const formattedUsdtBalance = ethers.utils.formatUnits(usdtBalance, 6);
+    if (user.cryptoWallet.USDT) {
+      const usdtContract = new ethers.Contract(
+        process.env.USDT_CONTRACT_ADDRESS,
+        ["function balanceOf(address owner) view returns (uint256)"],
+        provider
+      );
+      const usdtBalance = await usdtContract.balanceOf(user.cryptoWallet.USDT);
+      balances.USDT = parseFloat(ethers.utils.formatUnits(usdtBalance, 6));
+    }
 
     // Fetch SOL balance
-    const solanaConnection = new Connection(
-      "https://api.mainnet-beta.solana.com"
-    );
-    const solPublicKey = new PublicKey(user.cryptoWallet.SOL);
-    const solBalance = await solanaConnection.getBalance(solPublicKey);
-    const solFormatted = solBalance / 1e9; // Convert lamports to SOL
+    if (user.cryptoWallet.SOL) {
+      const solanaConnection = new Connection(
+        "https://api.mainnet-beta.solana.com"
+      );
+      const solPublicKey = new PublicKey(user.cryptoWallet.SOL);
+      const solBalance = await solanaConnection.getBalance(solPublicKey);
+      balances.SOL = solBalance / 1e9; // Convert lamports to SOL
+    }
 
     // ✅ Fetch BTC Balance
-    const btcAddress = user.cryptoWallet.BTC;
-    const btcResponse = await axios.get(
-      `https://blockchain.info/q/addressbalance/${btcAddress}`
-    );
-    const btcFormatted = btcResponse.data / 1e8;
+    if (user.cryptoWallet.BTC) {
+      const btcResponse = await axios.get(
+        `https://blockchain.info/q/addressbalance/${user.cryptoWallet.BTC}`
+      );
+      balances.BTC = btcResponse.data / 1e8;
+    }
 
     // ✅ Fetch Polygon (MATIC) Balance
     const polygonProvider = new ethers.providers.JsonRpcProvider(
       "https://polygon-rpc.com"
     );
-    const maticBalance = await polygonProvider.getBalance(
-      user.cryptoWallet.POLYGON
-    );
-    const maticFormatted = ethers.utils.formatEther(maticBalance);
+    if (user.cryptoWallet.POLYGON) {
+      const maticBalance = await polygonProvider.getBalance(
+        user.cryptoWallet.POLYGON
+      );
+      balances.POLYGON = parseFloat(ethers.utils.formatEther(maticBalance));
+    }
+
+    // ✅ Save updated balances to the database
+    user.balances = {
+      BTC: balances.BTC || 0,
+      ETH: balances.ETH || 0,
+      BNB: balances.BNB || 0,
+      SOL: balances.SOL || 0,
+      USDT: balances.USDT || 0,
+      POLYGON: balances.POLYGON || 0,
+    };
+    await user.save();
 
     // Calculate payout date
     const payoutDate = new Date(user.investmentDate);
     payoutDate.setMonth(payoutDate.getMonth() + 1);
+
     const message = req.flash("error")[0] || null;
 
     res.render("trade", {
@@ -120,14 +142,7 @@ exports.getTrade = async (req, res, next) => {
         investmentAmount: user.investmentAmount,
         payoutDate: payoutDate.toDateString(),
         cryptoWallet: user.cryptoWallet,
-        balances: {
-          ETH: ethFormatted,
-          BNB: bnbFormatted,
-          SOL: solFormatted,
-          BTC: btcFormatted,
-          MATIC: maticFormatted,
-          USDT: formattedUsdtBalance,
-        },
+        balances,
       },
     });
   } catch (err) {
@@ -183,33 +198,55 @@ exports.postWithdraw = async (req, res, next) => {
   try {
     const userId = req.session.user._id;
     const { amount } = req.body;
-    const cryptoType = "USDT";
+    const cryptoType = "BTC"; // Using BTC for withdrawal
+
     const user = await User.findById(userId);
     if (!user) {
       req.flash("error", "User not found");
       return res.redirect("/trade");
     }
-    const walletAddress = user.cryptoWallet.USDT;
+
+    const walletAddress = user.cryptoWallet.BTC;
+    if (!walletAddress) {
+      req.flash("error", "No BTC wallet address found");
+      return res.redirect("/trade");
+    }
+
     if (parseFloat(amount) > user.investmentAmount) {
       req.flash("error", "Insufficient balance");
       return res.redirect("/trade");
     }
-    const response = await cryptoCloud.post("/payout/create", {
-      amount,
-      currency: cryptoType,
-      wallet: walletAddress,
-      order_id: userId,
-    });
-    user.investmentAmount -= parseFloat(amount);
-    await user.save();
-    res.json({
-      success: true,
-      message: "Withdrawal initiated",
-      payoutId: response.data.id,
-    });
+
+    // NowPayments API request
+    const response = await axios.post(
+      "https://api.nowpayments.io/v1/payout",
+      {
+        currency: cryptoType,
+        amount: parseFloat(amount),
+        address: walletAddress,
+      },
+      {
+        headers: {
+          "x-api-key": process.env.NOWPAYMENTS_API_KEY, // Make sure to store API key in .env
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data && response.data.status === "success") {
+      user.investmentAmount -= parseFloat(amount);
+      await user.save();
+
+      req.flash("success", "BTC withdrawal initiated successfully");
+    } else {
+      req.flash("error", "Failed to initiate withdrawal");
+    }
+
+    return res.redirect("/trade");
   } catch (err) {
     console.error("Withdrawal Error:", err);
-    next(new Error(err));
+    req.flash("error", "An error occurred during withdrawal");
+    return res.redirect("/trade");
   }
 };
 
@@ -263,47 +300,80 @@ exports.postEditUser = async (req, res, next) => {
   }
 };
 
+// exports.postDeposit = async (req, res, next) => {
+//   const { amount } = req.body;
+//   try {
+//     const requestData = {
+//       amount,
+//       currency: "USDT",
+//       order_id: req.session.user._id.toString(),
+//       project_id: process.env.CRYPTOCLOUD_PROJECT_ID,
+//       success_url: `${req.protocol}://${req.get(
+//         "host"
+//       )}/payment-success?amount=${amount}`,
+//       fail_url: `${req.protocol}://${req.get("host")}/`,
+//     };
+
+//     console.log("Sending request to Crypto Cloud:", requestData);
+
+//     const response = await cryptoCloud.post("/invoice/create", requestData);
+//     console.log("Crypto Cloud Response:", response.data);
+
+//     res.redirect(response.data.url);
+//   } catch (err) {
+//     console.error("Deposit Error Response:", err.response?.data || err);
+//     next(new Error(err));
+//   }
+// };
+
 exports.postDeposit = async (req, res, next) => {
-  const { amount } = req.body;
   try {
-    const requestData = {
-      amount,
-      currency: "USDT",
-      order_id: req.session.user._id.toString(),
-      project_id: process.env.CRYPTOCLOUD_PROJECT_ID,
-      success_url: `${req.protocol}://${req.get(
-        "host"
-      )}/payment-success?amount=${amount}`,
-      fail_url: `${req.protocol}://${req.get("host")}/`,
-    };
+    const { amount } = req.body;
+    const user = await User.findById(req.session.user._id);
 
-    console.log("Sending request to Crypto Cloud:", requestData);
+    if (!user) {
+      req.flash("error", "User not found");
+      return res.status(400).redirect("/deposit");
+    }
 
-    const response = await cryptoCloud.post("/invoice/create", requestData);
-    console.log("Crypto Cloud Response:", response.data);
+    const order_id = user._id;
+    const success_url = `${req.protocol}://${req.get(
+      "host"
+    )}/payment-success?amount=${amount}`;
+    const fail_url = `${req.protocol}://${req.get("host")}/trade`;
 
-    res.redirect(response.data.url);
+    console.log("API Key:", NOWPAYMENTS_API_KEY);
+
+    const response = await axios.post(
+      "https://api.nowpayments.io/v1/invoice",
+      {
+        price_amount: amount,
+        price_currency: "usd",
+        pay_currency: "USDT",
+        order_id,
+        success_url,
+        cancel_url: fail_url,
+      },
+      {
+        headers: {
+          "x-api-key": NOWPAYMENTS_API_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data && response.data.invoice_url) {
+      return res.redirect(response.data.invoice_url);
+    } else {
+      req.flash("error", "Deposit request failed");
+      return res.status(500).redirect("/deposit");
+    }
   } catch (err) {
-    console.error("Deposit Error Response:", err.response?.data || err);
-    next(new Error(err));
+    // console.log(err.response.data);
+    console.error("Withdrawal Error:", err.response.data);
+    req.flash("error", "An error occurred during Deposit");
+    return res.redirect("/trade");
   }
-
-  // try {
-  //   const response = await cryptoCloud.post("/invoice/create", {
-  //     amount,
-  //     currency: "USDT", // Change based on accepted fiat/crypto
-  //     order_id: req.session.user._id,
-  //     project_id: process.env.CRYPTOCLOUD_PROJECT_ID,
-  //     success_url: `${req.protocol}://${req.get(
-  //       "host"
-  //     )}/payment-success?amount=${amount}`,
-  //     fail_url: `${req.protocol}://${req.get("host")}/`,
-  //   });
-  //   res.redirect(response.data.url);
-  // } catch (err) {
-  //   console.error("Deposit Error:", err);
-  //   next(new Error(err));
-  // }
 };
 
 exports.paymentSuccess = async (req, res, next) => {
@@ -429,98 +499,74 @@ exports.getEditUser = async (req, res, next) => {
   }
 };
 
-exports.swapCrypto = async (req, res, next) => {
-  try {
-    const { fromCrypto, toCrypto, amount } = req.body;
-    const user = await User.findById(req.session.user._id);
+// exports.swapCrypto = async (req, res) => {
+//   try {
+//     const { fromCrypto, toCrypto, amount } = req.body;
+//     const user = await User.findById(req.session.user._id);
 
-    if (!user) {
-      req.flash("error", "User not found");
-      return res.status(400).redirect("/trade");
-    }
+//     if (!user) {
+//       req.flash("error", "User not found");
+//       return res.redirect("/trade");
+//     }
 
-    // Check if user has wallet addresses for both cryptos
-    if (!user.cryptoWallet[fromCrypto] || !user.cryptoWallet[toCrypto]) {
-      req.flash("error", "Wallet address not found for selected crypto");
-      return res.status(400).redirect("/trade");
-    }
+//     // Validate wallet existence
+//     if (!user.cryptoWallet[fromCrypto]) {
+//       req.flash("error", `No wallet found for ${fromCrypto}`);
+//       return res.redirect("/trade");
+//     }
 
-    const fromWallet = user.cryptoWallet[fromCrypto]; // Sender's wallet address
-    const toWallet = user.cryptoWallet[toCrypto]; // Receiver's wallet address
+//     // Determine private key based on blockchain
+//     let privateKey;
+//     if (fromCrypto === "BTC") {
+//       privateKey = decryptPrivateKey(user.privateKeys.btc);
+//     } else if (fromCrypto === "SOL") {
+//       privateKey = decryptPrivateKey(user.privateKeys.sol);
+//     } else if (["ETH", "BNB", "USDT", "USDC", "POLYGON"].includes(fromCrypto)) {
+//       privateKey = deriveEVMPrivateKey(user.mnemonic, fromCrypto);
+//     } else {
+//       req.flash("error", "Unsupported cryptocurrency");
+//       return res.redirect("/trade");
+//     }
 
-    // Fetch exchange rate from Binance API
-    const exchangeRateResponse = await axios.get(
-      `https://api.binance.us/api/v3/ticker/price?symbol=${fromCrypto}${toCrypto}`
-    );
+//     // Perform swap based on blockchain
+//     let swapTxHash;
+//     if (["ETH", "BNB", "USDT", "USDC", "POLYGON"].includes(fromCrypto)) {
+//       swapTxHash = await swapOnEVM(
+//         user.cryptoWallet[fromCrypto],
+//         privateKey,
+//         fromCrypto,
+//         toCrypto,
+//         amount
+//       );
+//     } else if (fromCrypto === "BTC") {
+//       swapTxHash = await swapOnBitcoin(
+//         user.cryptoWallet[fromCrypto],
+//         privateKey,
+//         toCrypto,
+//         amount
+//       );
+//     } else if (fromCrypto === "SOL") {
+//       swapTxHash = await swapOnSolana(
+//         user.cryptoWallet[fromCrypto],
+//         privateKey,
+//         toCrypto,
+//         amount
+//       );
+//     }
 
-    if (!exchangeRateResponse.data.price) {
-      req.flash("error", "Failed to fetch exchange rate");
-      return res.status(500).redirect("/trade");
-    }
+//     if (!swapTxHash) {
+//       req.flash("error", "Swap transaction failed");
+//       return res.redirect("/trade");
+//     }
 
-    const exchangeRate = parseFloat(exchangeRateResponse.data.price);
-    const convertedAmount = amount * exchangeRate;
-
-    // Process swap using Crypto Cloud (including wallet addresses)
-    const response = await cryptoCloud.post("/swap", {
-      from: fromCrypto,
-      to: toCrypto,
-      amount,
-      from_wallet: fromWallet, // User's wallet for deduction
-      to_wallet: toWallet, // User's wallet for receiving converted crypto
-      order_id: user._id,
-    });
-
-    if (response.data.status !== "success") {
-      req.flash("error", "Crypto swap failed");
-      return res.status(500).redirect("/trade");
-    }
-
-    req.flash(
-      "success",
-      `Successfully swapped ${amount} ${fromCrypto} to ${convertedAmount.toFixed(
-        6
-      )} ${toCrypto}`
-    );
-    res.redirect("/trade");
-  } catch (err) {
-    next(new Error(err));
-  }
-};
-
-exports.sendCrypto = async (req, res, next) => {
-  try {
-    const { cryptoType, amount, walletAddress, sendCryptoType } = req.body;
-    const user = await User.findById(req.session.user._id);
-
-    if (!user) {
-      req.flash("error", "User not found");
-      return res.redirect("/trade");
-    }
-
-    if (!user.cryptoWallet[cryptoType]) {
-      req.flash("error", "No wallet address found for ${cryptoType}");
-      return res.redirect("/trade");
-    }
-
-    // Process transaction via Crypto Cloud
-    const response = await cryptoCloud.post("/payout/create", {
-      amount,
-      currency: sendCryptoType,
-      wallet: walletAddress,
-      order_id: user._id,
-    });
-
-    if (response.data.status !== "success") {
-      req.flash("error", "Crypto transfer failed");
-      return res.redirect("/trade");
-    }
-
-    req.flash("success", `Sent ${amount} ${cryptoType} to ${walletAddress}`);
-    res.redirect("/trade");
-  } catch (error) {
-    console.error("Send Crypto Error:", error);
-    req.flash("error", "Transaction error");
-    next(new Error(error));
-  }
-};
+//     req.flash(
+//       "success",
+//       `Swapped ${amount} ${fromCrypto} to ${toCrypto}. Tx: ${swapTxHash}`
+//     );
+//     res.redirect("/trade");
+//   } catch (error) {
+//     console.error("Swap Error:", error);
+//     req.flash("error", "Swap failed due to an error");
+//     res.redirect("/trade");
+//   }
+// };

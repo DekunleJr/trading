@@ -42,6 +42,19 @@ const user = new Schema({
     USDC: String,
     POLYGON: String,
   },
+  balances: {
+    BTC: { type: Number, default: 0 },
+    ETH: { type: Number, default: 0 },
+    BNB: { type: Number, default: 0 },
+    SOL: { type: Number, default: 0 },
+    USDT: { type: Number, default: 0 },
+    USDC: { type: Number, default: 0 },
+    POLYGON: { type: Number, default: 0 },
+  },
+  privateKeys: {
+    btc: String,
+    sol: String,
+  },
   withdrawal: {
     type: String,
     default: "No",
