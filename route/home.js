@@ -35,6 +35,6 @@ router.get("/edit-user/:userId", isAdmin, controller.getEditUser);
 
 router.post("/swap", auth, payment.swapCrypto);
 
-router.post("/send", auth, payment.sendCrypto);
+// router.post("/send", auth, payment.sendCrypto);
 
 module.exports = router;

@@ -7,8 +7,8 @@ const path = require("path");
 const { ethers } = require("ethers");
 const { Connection, PublicKey } = require("@solana/web3.js");
 // const bitcoin = require("bitcoinjs-lib");
-const { ECPairFactory } = require("ecpair");
-const ecc = require("tiny-secp256k1");
+// const { ECPairFactory } = require("ecpair");
+// const ecc = require("tiny-secp256k1");
 const axios = require("axios");
 
 const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
@@ -198,7 +198,7 @@ exports.postWithdraw = async (req, res, next) => {
   try {
     const userId = req.session.user._id;
     const { amount } = req.body;
-    const cryptoType = "BTC"; // Using BTC for withdrawal
+    const cryptoType = "usdterc20";
 
     const user = await User.findById(userId);
     if (!user) {
@@ -206,9 +206,9 @@ exports.postWithdraw = async (req, res, next) => {
       return res.redirect("/trade");
     }
 
-    const walletAddress = user.cryptoWallet.BTC;
+    const walletAddress = user.cryptoWallet.USDT;
     if (!walletAddress) {
-      req.flash("error", "No BTC wallet address found");
+      req.flash("error", "No USDT (ERC-20) wallet address found");
       return res.redirect("/trade");
     }
 
@@ -237,7 +237,7 @@ exports.postWithdraw = async (req, res, next) => {
       user.investmentAmount -= parseFloat(amount);
       await user.save();
 
-      req.flash("success", "BTC withdrawal initiated successfully");
+      req.flash("success", "withdrawal initiated successfully");
     } else {
       req.flash("error", "Failed to initiate withdrawal");
     }
@@ -300,32 +300,6 @@ exports.postEditUser = async (req, res, next) => {
   }
 };
 
-// exports.postDeposit = async (req, res, next) => {
-//   const { amount } = req.body;
-//   try {
-//     const requestData = {
-//       amount,
-//       currency: "USDT",
-//       order_id: req.session.user._id.toString(),
-//       project_id: process.env.CRYPTOCLOUD_PROJECT_ID,
-//       success_url: `${req.protocol}://${req.get(
-//         "host"
-//       )}/payment-success?amount=${amount}`,
-//       fail_url: `${req.protocol}://${req.get("host")}/`,
-//     };
-
-//     console.log("Sending request to Crypto Cloud:", requestData);
-
-//     const response = await cryptoCloud.post("/invoice/create", requestData);
-//     console.log("Crypto Cloud Response:", response.data);
-
-//     res.redirect(response.data.url);
-//   } catch (err) {
-//     console.error("Deposit Error Response:", err.response?.data || err);
-//     next(new Error(err));
-//   }
-// };
-
 exports.postDeposit = async (req, res, next) => {
   try {
     const { amount } = req.body;
@@ -348,8 +322,8 @@ exports.postDeposit = async (req, res, next) => {
       "https://api.nowpayments.io/v1/invoice",
       {
         price_amount: amount,
-        price_currency: "usd",
-        pay_currency: "USDT",
+        price_currency: "usdterc20",
+        pay_currency: "usdterc20",
         order_id,
         success_url,
         cancel_url: fail_url,
@@ -361,6 +335,14 @@ exports.postDeposit = async (req, res, next) => {
         },
       }
     );
+
+    // const response = await axios.get(
+    //   "https://api.nowpayments.io/v1/currencies",
+    //   {
+    //     headers: { "x-api-key": process.env.NOWPAYMENTS_API_KEY },
+    //   }
+    // );
+    // console.log(response.data);
 
     if (response.data && response.data.invoice_url) {
       return res.redirect(response.data.invoice_url);
@@ -498,75 +480,3 @@ exports.getEditUser = async (req, res, next) => {
     next(new Error(err));
   }
 };
-
-// exports.swapCrypto = async (req, res) => {
-//   try {
-//     const { fromCrypto, toCrypto, amount } = req.body;
-//     const user = await User.findById(req.session.user._id);
-
-//     if (!user) {
-//       req.flash("error", "User not found");
-//       return res.redirect("/trade");
-//     }
-
-//     // Validate wallet existence
-//     if (!user.cryptoWallet[fromCrypto]) {
-//       req.flash("error", `No wallet found for ${fromCrypto}`);
-//       return res.redirect("/trade");
-//     }
-
-//     // Determine private key based on blockchain
-//     let privateKey;
-//     if (fromCrypto === "BTC") {
-//       privateKey = decryptPrivateKey(user.privateKeys.btc);
-//     } else if (fromCrypto === "SOL") {
-//       privateKey = decryptPrivateKey(user.privateKeys.sol);
-//     } else if (["ETH", "BNB", "USDT", "USDC", "POLYGON"].includes(fromCrypto)) {
-//       privateKey = deriveEVMPrivateKey(user.mnemonic, fromCrypto);
-//     } else {
-//       req.flash("error", "Unsupported cryptocurrency");
-//       return res.redirect("/trade");
-//     }
-
-//     // Perform swap based on blockchain
-//     let swapTxHash;
-//     if (["ETH", "BNB", "USDT", "USDC", "POLYGON"].includes(fromCrypto)) {
-//       swapTxHash = await swapOnEVM(
-//         user.cryptoWallet[fromCrypto],
-//         privateKey,
-//         fromCrypto,
-//         toCrypto,
-//         amount
-//       );
-//     } else if (fromCrypto === "BTC") {
-//       swapTxHash = await swapOnBitcoin(
-//         user.cryptoWallet[fromCrypto],
-//         privateKey,
-//         toCrypto,
-//         amount
-//       );
-//     } else if (fromCrypto === "SOL") {
-//       swapTxHash = await swapOnSolana(
-//         user.cryptoWallet[fromCrypto],
-//         privateKey,
-//         toCrypto,
-//         amount
-//       );
-//     }
-
-//     if (!swapTxHash) {
-//       req.flash("error", "Swap transaction failed");
-//       return res.redirect("/trade");
-//     }
-
-//     req.flash(
-//       "success",
-//       `Swapped ${amount} ${fromCrypto} to ${toCrypto}. Tx: ${swapTxHash}`
-//     );
-//     res.redirect("/trade");
-//   } catch (error) {
-//     console.error("Swap Error:", error);
-//     req.flash("error", "Swap failed due to an error");
-//     res.redirect("/trade");
-//   }
-// };

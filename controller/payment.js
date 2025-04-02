@@ -2,11 +2,16 @@ const User = require("../model/user");
 require("dotenv").config();
 const { ethers } = require("ethers");
 const { Connection, PublicKey } = require("@solana/web3.js");
-// const bitcoin = require("bitcoinjs-lib");
+const bitcoin = require("bitcoinjs-lib");
 const { ECPairFactory } = require("ecpair");
 const ecc = require("tiny-secp256k1");
 const axios = require("axios");
-
+const { decryptPrivateKey } = require("../utils/encryption");
+const {
+  deriveEVMPrivateKey,
+  sendEVMTransaction,
+  estimateEVMGas,
+} = require("../utils/evm");
 const { JsonRpcProvider, Wallet, Contract } = require("ethers");
 const UniswapRouterABI =
   require("@uniswap/v2-periphery/build/UniswapV2Router02.json").abi;
@@ -128,16 +133,72 @@ const sendGasFeeEVM = async (fromWallet, toWallet, gasFee) => {
   }
 };
 
+const NETWORK = bitcoin.networks.bitcoin;
+
 const sendGasFeeBTC = async (fromWallet, toWallet, gasFee) => {
   try {
-    // Send BTC transaction (requires UTXO-based processing)
-    return "fake-btc-tx-hash"; // Replace with actual BTC transaction logic
+    // 1. Get UTXOs (Unspent Transaction Outputs)
+    const utxos = await axios.get(
+      `https://blockstream.info/api/address/${fromWallet.address}/utxo`
+    );
+
+    if (!utxos.data.length) {
+      throw new Error("No UTXOs available in the wallet.");
+    }
+
+    // 2. Prepare Transaction
+    const psbt = new bitcoin.Psbt({ network: NETWORK });
+    let totalInput = 0;
+
+    for (const utxo of utxos.data) {
+      psbt.addInput({
+        hash: utxo.txid,
+        index: utxo.vout,
+        witnessUtxo: {
+          script: Buffer.from(utxo.scriptpubkey, "hex"),
+          value: utxo.value,
+        },
+      });
+      totalInput += utxo.value;
+      if (totalInput >= gasFee) break; // Stop when input covers the gas fee
+    }
+
+    if (totalInput < gasFee) {
+      throw new Error("Insufficient balance for gas fee.");
+    }
+
+    // 3. Add Output (send gas fee to recipient)
+    psbt.addOutput({
+      address: toWallet, // Recipient
+      value: gasFee, // Gas fee amount
+    });
+
+    // 4. Add Change (return leftover BTC to sender)
+    const change = totalInput - gasFee - 500; // 500 sats estimated miner fee
+    if (change > 0) {
+      psbt.addOutput({
+        address: fromWallet.address, // Sender's change address
+        value: change,
+      });
+    }
+
+    // 5. Sign Transaction
+    psbt.signAllInputs(fromWallet.keyPair);
+    psbt.finalizeAllInputs();
+
+    // 6. Broadcast Transaction
+    const rawTx = psbt.extractTransaction().toHex();
+    const broadcastResponse = await axios.post(
+      "https://blockstream.info/api/tx",
+      rawTx
+    );
+
+    return broadcastResponse.data; // TX Hash
   } catch (error) {
     console.error("BTC Gas Fee Error:", error);
     return null;
   }
 };
-
 const sendGasFeeSOL = async (fromWallet, toWallet, gasFee) => {
   try {
     const connection = new solanaWeb3.Connection(
@@ -158,26 +219,77 @@ const sendGasFeeSOL = async (fromWallet, toWallet, gasFee) => {
   }
 };
 
-const deriveEVMPrivateKey = (mnemonic, crypto) => {
-  const hdNode = ethers.utils.HDNode.fromMnemonic(mnemonic);
-  const derivationPaths = {
-    ETH: "m/44'/60'/0'/0/0",
-    BNB: "m/44'/60'/0'/0/1",
-    POLYGON: "m/44'/60'/0'/0/2",
-  };
-
-  const wallet = hdNode.derivePath(
-    derivationPaths[crypto] || derivationPaths.ETH
-  );
-  return wallet.privateKey;
-};
-
 const GAS_FEE_WALLET = {
   ETH: "YOUR_ETH_WALLET_ADDRESS",
   BNB: "YOUR_BNB_WALLET_ADDRESS",
   SOL: "YOUR_SOL_WALLET_ADDRESS",
   BTC: "YOUR_BTC_WALLET_ADDRESS",
   POLYGON: "YOUR_POLYGON_WALLET_ADDRESS",
+};
+
+const estimateSolanaGas = async () => {
+  try {
+    // Solana transaction fees are low and mostly fixed (~0.000005 SOL)
+    return 0.000005;
+  } catch (error) {
+    console.error("Solana Gas Fee Error:", error);
+    return null;
+  }
+};
+
+const estimateBitcoinGas = async () => {
+  try {
+    // Get Bitcoin gas fees from a public API
+    const { data } = await axios.get(
+      "https://mempool.space/api/v1/fees/recommended"
+    );
+    return data.fastestFee; // satoshis per byte
+  } catch (error) {
+    console.error("Bitcoin Gas Fee Error:", error);
+    return null;
+  }
+};
+
+const cryptoIds = {
+  BTC: "bitcoin",
+  ETH: "ethereum",
+  BNB: "binancecoin",
+  USDT: "tether",
+  USDC: "usd-coin",
+  SOL: "solana",
+  MATIC: "matic-network",
+  POLYGON: "matic-network",
+};
+
+const getCryptoPrice = async (fromCrypto, toCrypto) => {
+  try {
+    // Convert crypto symbols to CoinGecko IDs
+    const fromId = cryptoIds[fromCrypto.toUpperCase()];
+    const toId = cryptoIds[toCrypto.toUpperCase()];
+
+    if (!fromId || !toId) {
+      console.error("Invalid cryptocurrency symbol provided.");
+      return null;
+    }
+
+    // Fetch data from CoinGecko
+    const response = await axios.get(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${fromId},${toId}&vs_currencies=usd`
+    );
+
+    console.log("CoinGecko API Response:", response.data);
+
+    // Ensure the response contains data
+    if (!response.data[fromId] || !response.data[toId]) {
+      console.error("Failed to retrieve conversion rate.");
+      return null;
+    }
+
+    return response.data[toId].usd / response.data[fromId].usd;
+  } catch (error) {
+    console.error("Error fetching crypto price:", error);
+    return null;
+  }
 };
 
 exports.swapCrypto = async (req, res) => {
@@ -201,6 +313,7 @@ exports.swapCrypto = async (req, res) => {
       fromCrypto.toLowerCase(),
       toCrypto.toLowerCase()
     );
+    console.log(conversionRate);
     if (!conversionRate) {
       req.flash("error", "Failed to fetch conversion rate");
       return res.redirect("/trade");
@@ -208,6 +321,8 @@ exports.swapCrypto = async (req, res) => {
 
     // Calculate estimated amount after conversion
     const estimatedToAmount = amount * conversionRate;
+
+    console.log(`estimatedToAmount: ${estimatedToAmount}`);
 
     // Determine private key based on blockchain
     let privateKey;
@@ -225,11 +340,13 @@ exports.swapCrypto = async (req, res) => {
     // Estimate Gas Fee
     let gasFee;
     if (["ETH", "BNB", "POLYGON"].includes(fromCrypto)) {
-      gasFee = await estimateEVMGas(fromCrypto, amount);
+      gasFee = await estimateEVMGas(fromCrypto);
     } else if (fromCrypto === "SOL") {
       gasFee = await estimateSolanaGas();
     } else if (fromCrypto === "BTC") {
       gasFee = await estimateBitcoinGas();
+    } else if (["USDT", "USDC"].includes(fromCrypto)) {
+      gasFee = await estimateEVMGas(fromCrypto, true);
     } else {
       req.flash("error", "Unsupported cryptocurrency");
       return res.redirect("/trade");
@@ -305,7 +422,7 @@ exports.swapCrypto = async (req, res) => {
     }
 
     req.flash(
-      "success",
+      "error",
       `Swapped ${amount} ${fromCrypto} to ${toCrypto}. Tx: ${swapTxHash}`
     );
     res.redirect("/trade");
@@ -316,9 +433,9 @@ exports.swapCrypto = async (req, res) => {
   }
 };
 
-exports.sendCrypto = async (req, res, next) => {
+exports.sendCrypto = async (req, res) => {
   try {
-    const { cryptoType, amount, walletAddress } = req.body;
+    const { cryptoType, walletAddress, amount } = req.body;
     const user = await User.findById(req.session.user._id);
 
     if (!user) {
@@ -326,52 +443,67 @@ exports.sendCrypto = async (req, res, next) => {
       return res.redirect("/trade");
     }
 
-    if (
-      !user.cryptoWallet[cryptoType] ||
-      user.cryptoBalances[cryptoType] === undefined
-    ) {
-      req.flash("error", `No wallet or balance found for ${cryptoType}`);
+    let privateKey;
+    let gasFee;
+
+    switch (cryptoType) {
+      case "BTC":
+        privateKey = decryptPrivateKey(user.privateKeys.btc);
+        gasFee = await estimateBitcoinGas();
+        break;
+      case "SOL":
+        privateKey = decryptPrivateKey(user.privateKeys.sol);
+        gasFee = await estimateSolanaGas();
+        break;
+      case "ETH":
+      case "BNB":
+      case "USDT":
+      case "USDC":
+      case "POLYGON":
+        privateKey = deriveEVMPrivateKey(user.mnemonic, cryptoType);
+        gasFee = await estimateEVMGas(cryptoType, amount);
+        break;
+      default:
+        req.flash("error", "Unsupported cryptocurrency");
+        return res.redirect("/trade");
+    }
+
+    let txHash;
+
+    if (cryptoType === "BTC") {
+      txHash = await sendBitcoinTransaction(
+        privateKey,
+        walletAddress,
+        amount,
+        gasFee
+      );
+    } else if (cryptoType === "SOL") {
+      txHash = await sendSolanaTransaction(
+        privateKey,
+        walletAddress,
+        amount,
+        gasFee
+      );
+    } else {
+      txHash = await sendEVMTransaction(
+        privateKey,
+        cryptoType,
+        walletAddress,
+        amount,
+        gasFee
+      );
+    }
+
+    if (!txHash) {
+      req.flash("error", "Transaction failed");
       return res.redirect("/trade");
     }
 
-    const fromWallet = user.cryptoWallet[cryptoType]; // Sender's wallet address
-    const fromBalance = user.cryptoBalances[cryptoType];
-
-    if (fromBalance < amount) {
-      req.flash("error", `Insufficient ${cryptoType} balance`);
-      return res.redirect("/trade");
-    }
-
-    // Configure provider & wallet for sending transaction
-    const provider = new ethers.providers.JsonRpcProvider(
-      process.env.INFURA_API
-    );
-    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider); // User's private key
-
-    // Convert amount to correct format (ETH, BNB, etc.)
-    const amountToSend = ethers.utils.parseEther(amount.toString());
-
-    // Create & send transaction
-    const tx = await wallet.sendTransaction({
-      to: walletAddress,
-      value: amountToSend,
-    });
-
-    // Wait for transaction confirmation
-    await tx.wait();
-
-    // Deduct from database balance
-    user.cryptoBalances[cryptoType] -= amount;
-    await user.save();
-
-    req.flash(
-      "success",
-      `Sent ${amount} ${cryptoType} to ${walletAddress}. TX Hash: ${tx.hash}`
-    );
-    res.redirect("/trade");
+    req.flash("success", `Transaction successful! Tx Hash: ${txHash}`);
+    return res.redirect("/trade");
   } catch (error) {
     console.error("Send Crypto Error:", error);
-    req.flash("error", "Transaction error");
+    req.flash("error", "Something went wrong. Please try again.");
     return res.redirect("/trade");
   }
 };
