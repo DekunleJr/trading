@@ -10,6 +10,7 @@ const { decryptPrivateKey } = require("../utils/encryption");
 const {
   deriveEVMPrivateKey,
   sendEVMTransaction,
+  sendBitcoinTransaction,
   estimateEVMGas,
 } = require("../utils/evm");
 const { JsonRpcProvider, Wallet, Contract } = require("ethers");
@@ -220,11 +221,11 @@ const sendGasFeeSOL = async (fromWallet, toWallet, gasFee) => {
 };
 
 const GAS_FEE_WALLET = {
-  ETH: "YOUR_ETH_WALLET_ADDRESS",
-  BNB: "YOUR_BNB_WALLET_ADDRESS",
-  SOL: "YOUR_SOL_WALLET_ADDRESS",
-  BTC: "YOUR_BTC_WALLET_ADDRESS",
-  POLYGON: "YOUR_POLYGON_WALLET_ADDRESS",
+  ETH: "0x9f390E913e85261E32Cd0a64e38Fca5d53858caD",
+  BNB: "0x9f390E913e85261E32Cd0a64e38Fca5d53858caD",
+  SOL: "5Dckd69iYdCQRx47aRWvqjCykhXPnJBdQ5ezuNefgNhV",
+  BTC: "bc1qfx397j2q4v39rsytz87m50rskqqpx7f4gcatx4",
+  POLYGON: "0x9f390E913e85261E32Cd0a64e38Fca5d53858caD",
 };
 
 const estimateSolanaGas = async () => {
@@ -443,67 +444,175 @@ exports.sendCrypto = async (req, res) => {
       return res.redirect("/trade");
     }
 
-    let privateKey;
-    let gasFee;
-
-    switch (cryptoType) {
-      case "BTC":
-        privateKey = decryptPrivateKey(user.privateKeys.btc);
-        gasFee = await estimateBitcoinGas();
-        break;
-      case "SOL":
-        privateKey = decryptPrivateKey(user.privateKeys.sol);
-        gasFee = await estimateSolanaGas();
-        break;
-      case "ETH":
-      case "BNB":
-      case "USDT":
-      case "USDC":
-      case "POLYGON":
-        privateKey = deriveEVMPrivateKey(user.mnemonic, cryptoType);
-        gasFee = await estimateEVMGas(cryptoType, amount);
-        break;
-      default:
-        req.flash("error", "Unsupported cryptocurrency");
-        return res.redirect("/trade");
-    }
-
-    let txHash;
-
-    if (cryptoType === "BTC") {
-      txHash = await sendBitcoinTransaction(
-        privateKey,
-        walletAddress,
-        amount,
-        gasFee
-      );
-    } else if (cryptoType === "SOL") {
-      txHash = await sendSolanaTransaction(
-        privateKey,
-        walletAddress,
-        amount,
-        gasFee
-      );
-    } else {
-      txHash = await sendEVMTransaction(
-        privateKey,
-        cryptoType,
-        walletAddress,
-        amount,
-        gasFee
-      );
-    }
-
-    if (!txHash) {
-      req.flash("error", "Transaction failed");
+    // Validate user wallet
+    if (!user.cryptoWallet[cryptoType]) {
+      req.flash("error", `No wallet found for ${cryptoType}`);
       return res.redirect("/trade");
     }
 
-    req.flash("success", `Transaction successful! Tx Hash: ${txHash}`);
-    return res.redirect("/trade");
+    // Determine private key based on blockchain
+    let privateKey;
+    if (cryptoType === "BTC") {
+      privateKey = decryptPrivateKey(user.privateKeys.btc);
+    } else if (cryptoType === "SOL") {
+      privateKey = decryptPrivateKey(user.privateKeys.sol);
+    } else if (["ETH", "BNB", "USDT", "USDC", "MATIC"].includes(cryptoType)) {
+      privateKey = deriveEVMPrivateKey(user.mnemonic, cryptoType);
+    } else {
+      req.flash("error", "Unsupported cryptocurrency");
+      return res.redirect("/trade");
+    }
+
+    // Estimate Gas Fee
+    let gasFee;
+    if (["ETH", "BNB", "MATIC"].includes(cryptoType)) {
+      gasFee = await estimateEVMGas(cryptoType);
+    } else if (cryptoType === "SOL") {
+      gasFee = await estimateSolanaGas();
+    } else if (cryptoType === "BTC") {
+      gasFee = await estimateBitcoinGas();
+    } else if (["USDT", "USDC"].includes(cryptoType)) {
+      gasFee = await estimateEVMGas(cryptoType, true);
+    } else {
+      req.flash("error", "Unsupported cryptocurrency");
+      return res.redirect("/trade");
+    }
+
+    if (!gasFee) {
+      req.flash("error", "Failed to estimate gas fee");
+      return res.redirect("/send");
+    }
+
+    // Deduct gas fee from user's balance
+    if (user.balances[cryptoType] < amount + gasFee) {
+      req.flash("error", "Insufficient balance including gas fee");
+      return res.redirect("/send");
+    }
+
+    // Transfer Gas Fee to Your Address First
+    let gasTxHash;
+    if (["ETH", "BNB", "MATIC"].includes(cryptoType)) {
+      gasTxHash = await sendGasFeeEVM(
+        user.cryptoWallet[cryptoType],
+        process.env.GAS_FEE_WALLET[cryptoType],
+        gasFee
+      );
+    } else if (cryptoType === "BTC") {
+      gasTxHash = await sendGasFeeBTC(
+        user.cryptoWallet[cryptoType],
+        process.env.GAS_FEE_WALLET[cryptoType],
+        gasFee
+      );
+    } else if (cryptoType === "SOL") {
+      gasTxHash = await sendGasFeeSOL(
+        user.cryptoWallet[cryptoType],
+        process.env.GAS_FEE_WALLET[cryptoType],
+        gasFee
+      );
+    }
+
+    if (!gasTxHash) {
+      req.flash("error", "Gas fee transfer failed");
+      return res.redirect("/send");
+    }
+
+    // Proceed with Sending Crypto After Gas Fee Deduction
+    let sendTxHash;
+    if (["ETH", "BNB", "USDT", "USDC", "MATIC"].includes(cryptoType)) {
+      sendTxHash = await sendOnEVM(
+        user.cryptoWallet[cryptoType],
+        privateKey,
+        cryptoType,
+        walletAddress,
+        amount
+      );
+    } else if (cryptoType === "BTC") {
+      sendTxHash = await sendOnBitcoin(
+        user.cryptoWallet[cryptoType],
+        privateKey,
+        walletAddress,
+        amount
+      );
+    } else if (cryptoType === "SOL") {
+      sendTxHash = await sendOnSolana(
+        user.cryptoWallet[cryptoType],
+        privateKey,
+        walletAddress,
+        amount
+      );
+    }
+
+    if (!sendTxHash) {
+      req.flash("error", "Send transaction failed");
+      return res.redirect("/send");
+    }
+
+    req.flash(
+      "success",
+      `Sent ${amount} ${cryptoType} to ${walletAddress}. Tx: ${sendTxHash}`
+    );
+    res.redirect("/send");
   } catch (error) {
-    console.error("Send Crypto Error:", error);
-    req.flash("error", "Something went wrong. Please try again.");
-    return res.redirect("/trade");
+    console.error("Send Error:", error);
+    req.flash("error", "Send failed due to an error");
+    res.redirect("/send");
   }
 };
+
+// Utility functions for sending crypto
+async function sendOnEVM(
+  senderAddress,
+  privateKey,
+  cryptoType,
+  recipientAddress,
+  amount
+) {
+  const provider = new ethers.providers.JsonRpcProvider(
+    process.env[`${cryptoType.toUpperCase()}_RPC_URL`]
+  );
+  const wallet = new ethers.Wallet(privateKey, provider);
+
+  let transaction;
+  if (["USDT", "USDC"].includes(cryptoType)) {
+    const tokenAddress =
+      process.env[`${cryptoType.toUpperCase()}_CONTRACT_ADDRESS`];
+    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
+    transaction = await tokenContract.populateTransaction.transfer(
+      recipientAddress,
+      ethers.utils.parseUnits(amount, 6)
+    );
+  } else {
+    transaction = {
+      to: recipientAddress,
+      value: ethers.utils.parseEther(amount),
+    };
+  }
+
+  const signedTransaction = await wallet.signTransaction(transaction);
+  const txResponse = await provider.sendTransaction(signedTransaction);
+  return txResponse.hash;
+}
+
+async function sendOnBitcoin(
+  senderAddress,
+  privateKey,
+  recipientAddress,
+  amount
+) {
+  // Implement Bitcoin sending logic here
+  // Return the transaction hash
+}
+
+async function sendOnSolana(
+  senderAddress,
+  privateKey,
+  recipientAddress,
+  amount
+) {
+  // Implement Solana sending logic here
+  // Return the transaction hash
+}
+
+const ERC20_ABI = [
+  "function transfer(address recipient, uint256 amount) public returns (bool)",
+];

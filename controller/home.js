@@ -12,6 +12,31 @@ const { Connection, PublicKey } = require("@solana/web3.js");
 const axios = require("axios");
 
 const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
+const NOWPAYMENTS_EMAIL = process.env.NOWPAYMENTS_EMAIL;
+const NOWPAYMENTS_PASSWORD = process.env.NOWPAYMENTS_PASSWORD;
+
+// Function to get auth token
+async function getAuthToken() {
+  try {
+    const response = await axios.post(
+      "https://api.nowpayments.io/v1/auth",
+      {
+        email: NOWPAYMENTS_EMAIL, // Admin email
+        password: NOWPAYMENTS_PASSWORD, // Admin password
+      },
+      {
+        headers: {
+          "x-api-key": NOWPAYMENTS_API_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return response.data.token;
+  } catch (error) {
+    console.error("Token Error:", error.response?.data || error.message);
+    return null;
+  }
+}
 
 exports.getindex = async (req, res, next) => {
   try {
@@ -198,7 +223,6 @@ exports.postWithdraw = async (req, res, next) => {
   try {
     const userId = req.session.user._id;
     const { amount } = req.body;
-    const cryptoType = "usdterc20";
 
     const user = await User.findById(userId);
     if (!user) {
@@ -216,22 +240,35 @@ exports.postWithdraw = async (req, res, next) => {
       req.flash("error", "Insufficient balance");
       return res.redirect("/trade");
     }
+    const authToken = await getAuthToken();
+    console.log("Auth Token:", authToken);
+    if (!authToken) {
+      req.flash("error", "Failed to authenticate with NowPayments");
+      return res.redirect("/trade");
+    }
 
+    console.log("NowPayments API Key:", NOWPAYMENTS_API_KEY);
     // NowPayments API request
     const response = await axios.post(
       "https://api.nowpayments.io/v1/payout",
       {
-        currency: cryptoType,
-        amount: parseFloat(amount),
-        address: walletAddress,
+        withdrawals: {
+          currency: "usdterc20",
+          amount: parseFloat(amount),
+          address: walletAddress,
+          ipn_callback_url: "https://nowpayments.io",
+        },
+        test: true,
       },
       {
         headers: {
-          "x-api-key": process.env.NOWPAYMENTS_API_KEY, // Make sure to store API key in .env
+          Authorization: `Bearer ${authToken}`,
+          "x-api-key": NOWPAYMENTS_API_KEY, // Make sure to store API key in .env
           "Content-Type": "application/json",
         },
       }
     );
+    console.log(response.data);
 
     if (response.data && response.data.status === "success") {
       user.investmentAmount -= parseFloat(amount);

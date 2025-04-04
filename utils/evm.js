@@ -1,4 +1,43 @@
 const { ethers } = require("ethers");
+const bitcoin = require("bitcoinjs-lib");
+const axios = require("axios");
+require("dotenv").config();
+
+// BlockCypher API (or use your Bitcoin Node)
+const API_URL = "https://api.blockcypher.com/v1/btc/main/txs/push";
+const NETWORK = bitcoin.networks.bitcoin; // Use bitcoin.networks.testnet for testnet
+
+async function sendBitcoinTransaction(
+  senderPrivateKey,
+  recipientAddress,
+  amount,
+  utxoTxId,
+  utxoIndex
+) {
+  try {
+    // Convert private key to key pair
+    const keyPair = bitcoin.ECPair.fromWIF(senderPrivateKey, NETWORK);
+
+    // Create a new transaction builder
+    const txb = new bitcoin.TransactionBuilder(NETWORK);
+    txb.addInput(utxoTxId, utxoIndex); // UTXO to spend
+    txb.addOutput(recipientAddress, Math.floor(amount * 1e8)); // Convert BTC to Satoshis
+
+    // Sign the transaction
+    txb.sign(0, keyPair);
+
+    // Build and serialize transaction
+    const tx = txb.build();
+    const txHex = tx.toHex();
+
+    // Broadcast transaction
+    const response = await axios.post(API_URL, { tx: txHex });
+    return response.data.tx.hash;
+  } catch (error) {
+    console.error("Transaction error:", error.response?.data || error.message);
+    throw new Error("Failed to send Bitcoin transaction");
+  }
+}
 
 const deriveEVMPrivateKey = (mnemonic, crypto) => {
   const hdNode = ethers.utils.HDNode.fromMnemonic(mnemonic);
@@ -35,4 +74,8 @@ const estimateEVMGas = async (network, isToken = false) => {
   }
 };
 
-module.exports = { deriveEVMPrivateKey, estimateEVMGas };
+module.exports = {
+  deriveEVMPrivateKey,
+  estimateEVMGas,
+  sendBitcoinTransaction,
+};
