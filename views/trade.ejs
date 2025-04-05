@@ -202,7 +202,7 @@
               <div class="col-6">
                 <label class="text-white">From:</label>
                 <!-- <label class="text-white">Select Crypto:</label> -->
-                <select name="cryptoType" class="form-select my-2">
+                <select name="currency" class="form-select my-2">
                   <% for (const [crypto, balance] of
                   Object.entries(user.cryptoWallet)) { %>
                   <option value="<%= crypto %>"><%= crypto %></option>
@@ -213,7 +213,7 @@
                 <label class="text-white">To:</label>
                 <input
                   type="text"
-                  name="walletAddress"
+                  name="toAddress"
                   class="form-control my-2"
                   placeholder="Wallet Address"
                 />

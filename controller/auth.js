@@ -51,12 +51,6 @@ exports.getSignup = (req, res, next) => {
 exports.postSignup = async (req, res, next) => {
   let { fulname, phone, password, email, investment, ref } = req.body;
   const errors = validationResult(req);
-  // const encryptPrivateKey encryptPrivateKey = (key) => {
-  //   const cipher = crypto.createCipher("aes-256-cbc", process.env.SECRET_KEY);
-  //   let encrypted = cipher.update(key, "utf8", "hex");
-  //   encrypted += cipher.final("hex");
-  //   return encrypted;
-  // };
 
   // Generate a mnemonic (seed phrase)
   const wallet = ethers.Wallet.createRandom();

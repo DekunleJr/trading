@@ -6,9 +6,11 @@ const bitcoin = require("bitcoinjs-lib");
 const { ECPairFactory } = require("ecpair");
 const ecc = require("tiny-secp256k1");
 const axios = require("axios");
-const { decryptPrivateKey } = require("../utils/encryption");
 const {
   deriveEVMPrivateKey,
+  decryptPrivateKey,
+} = require("../utils/encryption");
+const {
   sendEVMTransaction,
   sendBitcoinTransaction,
   estimateEVMGas,

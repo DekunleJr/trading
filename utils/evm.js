@@ -1,4 +1,3 @@
-const { ethers } = require("ethers");
 const bitcoin = require("bitcoinjs-lib");
 const axios = require("axios");
 require("dotenv").config();
@@ -39,20 +38,6 @@ async function sendBitcoinTransaction(
   }
 }
 
-const deriveEVMPrivateKey = (mnemonic, crypto) => {
-  const hdNode = ethers.utils.HDNode.fromMnemonic(mnemonic);
-  const derivationPaths = {
-    ETH: "m/44'/60'/0'/0/0",
-    BNB: "m/44'/60'/0'/0/1",
-    POLYGON: "m/44'/60'/0'/0/2",
-  };
-
-  const wallet = hdNode.derivePath(
-    derivationPaths[crypto] || derivationPaths.ETH
-  );
-  return wallet.privateKey;
-};
-
 const estimateEVMGas = async (network, isToken = false) => {
   try {
     // Get gas price from API
@@ -75,7 +60,6 @@ const estimateEVMGas = async (network, isToken = false) => {
 };
 
 module.exports = {
-  deriveEVMPrivateKey,
   estimateEVMGas,
   sendBitcoinTransaction,
 };

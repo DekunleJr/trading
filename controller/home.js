@@ -155,7 +155,7 @@ exports.getTrade = async (req, res, next) => {
     const payoutDate = new Date(user.investmentDate);
     payoutDate.setMonth(payoutDate.getMonth() + 1);
 
-    const message = req.flash("error")[0] || null;
+    const message = req.flash("error")[0] || req.flash("success")[0] || null;
 
     res.render("trade", {
       path: "/trade",
@@ -240,46 +240,57 @@ exports.postWithdraw = async (req, res, next) => {
       req.flash("error", "Insufficient balance");
       return res.redirect("/trade");
     }
-    const authToken = await getAuthToken();
-    console.log("Auth Token:", authToken);
-    if (!authToken) {
-      req.flash("error", "Failed to authenticate with NowPayments");
-      return res.redirect("/trade");
-    }
-
-    console.log("NowPayments API Key:", NOWPAYMENTS_API_KEY);
-    // NowPayments API request
-    const response = await axios.post(
-      "https://api.nowpayments.io/v1/payout",
-      {
-        withdrawals: {
-          currency: "usdterc20",
-          amount: parseFloat(amount),
-          address: walletAddress,
-          ipn_callback_url: "https://nowpayments.io",
-        },
-        test: true,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "x-api-key": NOWPAYMENTS_API_KEY, // Make sure to store API key in .env
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    console.log(response.data);
-
-    if (response.data && response.data.status === "success") {
+    MOCK_WITHDRAWAL = process.env.MOCK_WITHDRAWAL;
+    if (MOCK_WITHDRAWAL) {
+      // Mock withdrawal for testing purposes
+      req.flash("success", "Withdrawal initiated successfully (mock)");
       user.investmentAmount -= parseFloat(amount);
       await user.save();
-
-      req.flash("success", "withdrawal initiated successfully");
+      return res.redirect("/trade");
     } else {
-      req.flash("error", "Failed to initiate withdrawal");
-    }
+      const authToken = await getAuthToken();
+      console.log("Auth Token:", authToken);
+      if (!authToken) {
+        req.flash("error", "Failed to authenticate with NowPayments");
+        return res.redirect("/trade");
+      }
 
-    return res.redirect("/trade");
+      console.log("NowPayments API Key:", NOWPAYMENTS_API_KEY);
+      // NowPayments API request
+      const response = await axios.post(
+        "https://api.nowpayments.io/v1/payout",
+        {
+          withdrawals: [
+            {
+              currency: "usdterc20",
+              amount: parseFloat(amount),
+              address: walletAddress,
+              ipn_callback_url: "https://nowpayments.io",
+            },
+          ],
+          test: true,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "x-api-key": NOWPAYMENTS_API_KEY, // Make sure to store API key in .env
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log(response.data);
+
+      if (response.data && response.data.status === "success") {
+        user.investmentAmount -= parseFloat(amount);
+        await user.save();
+
+        req.flash("success", "withdrawal initiated successfully");
+      } else {
+        req.flash("error", "Failed to initiate withdrawal");
+      }
+
+      return res.redirect("/trade");
+    }
   } catch (err) {
     console.error("Withdrawal Error:", err);
     req.flash("error", "An error occurred during withdrawal");
@@ -353,39 +364,37 @@ exports.postDeposit = async (req, res, next) => {
     )}/payment-success?amount=${amount}`;
     const fail_url = `${req.protocol}://${req.get("host")}/trade`;
 
-    console.log("API Key:", NOWPAYMENTS_API_KEY);
-
-    const response = await axios.post(
-      "https://api.nowpayments.io/v1/invoice",
-      {
-        price_amount: amount,
-        price_currency: "usdterc20",
-        pay_currency: "usdterc20",
-        order_id,
-        success_url,
-        cancel_url: fail_url,
-      },
-      {
-        headers: {
-          "x-api-key": NOWPAYMENTS_API_KEY,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    // const response = await axios.get(
-    //   "https://api.nowpayments.io/v1/currencies",
-    //   {
-    //     headers: { "x-api-key": process.env.NOWPAYMENTS_API_KEY },
-    //   }
-    // );
-    // console.log(response.data);
-
-    if (response.data && response.data.invoice_url) {
-      return res.redirect(response.data.invoice_url);
+    MOCK_WITHDRAWAL = process.env.MOCK_WITHDRAWAL;
+    if (MOCK_WITHDRAWAL) {
+      // Mock withdrawal for testing purposes
+      const mockResponse = {
+        invoice_url: success_url,
+      };
+      return res.redirect(mockResponse.invoice_url);
     } else {
-      req.flash("error", "Deposit request failed");
-      return res.status(500).redirect("/deposit");
+      const response = await axios.post(
+        "https://api.nowpayments.io/v1/invoice",
+        {
+          price_amount: amount,
+          price_currency: "usdterc20",
+          pay_currency: "usdterc20",
+          order_id,
+          success_url,
+          cancel_url: fail_url,
+        },
+        {
+          headers: {
+            "x-api-key": NOWPAYMENTS_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (response.data && response.data.invoice_url) {
+        return res.redirect(response.data.invoice_url);
+      } else {
+        req.flash("error", "Deposit request failed");
+        return res.status(500).redirect("/deposit");
+      }
     }
   } catch (err) {
     // console.log(err.response.data);
