@@ -1,620 +1,257 @@
-const User = require("../model/user");
+// --- Existing Imports ---
+const { Web3 } = require("web3");
 require("dotenv").config();
 const { ethers } = require("ethers");
-const { Connection, PublicKey } = require("@solana/web3.js");
+const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
+const axios = require("axios");
 const bitcoin = require("bitcoinjs-lib");
 const { ECPairFactory } = require("ecpair");
 const ecc = require("tiny-secp256k1");
-const axios = require("axios");
+const Binance = require("node-binance-api"); // Assuming you use this for CEX
+
+const User = require("../model/user");
 const {
-  deriveEVMPrivateKey,
   decryptPrivateKey,
+  deriveEVMPrivateKey,
 } = require("../utils/encryption");
-const {
-  sendEVMTransaction,
-  sendBitcoinTransaction,
-  estimateEVMGas,
-} = require("../utils/evm");
-const { JsonRpcProvider, Wallet, Contract } = require("ethers");
-const UniswapRouterABI =
-  require("@uniswap/v2-periphery/build/UniswapV2Router02.json").abi;
-const swapOnEVM = async (
-  walletAddress,
-  privateKey,
-  fromCrypto,
-  toCrypto,
-  amount
-) => {
+
+// --- Environment Variables & Config ---
+const INFURA_API = process.env.INFURA_API;
+// ... other RPCs, Contract Addresses, API Keys ...
+const BINANCE_API_KEY = process.env.BINANCE_API_KEY;
+const BINANCE_API_SECRET = process.env.BINANCE_API_SECRET;
+
+// Define which currencies operate on which primary chain for DEX swaps
+const EVM_CHAIN_MAP = {
+  ETH: { rpc: INFURA_API, chain: "Ethereum" },
+  USDC: { rpc: INFURA_API, chain: "Ethereum" }, // Assuming ERC20
+  USDT: { rpc: INFURA_API, chain: "Ethereum" }, // Assuming ERC20
+  POLYGON: { rpc: process.env.POLYGON_RPC_URL, chain: "Polygon" }, // Native MATIC
+  BNB: { rpc: process.env.BSC_RPC_URL, chain: "BSC" }, // Native BNB
+};
+const NON_EVM_CHAINS = ["BTC", "SOL"];
+
+// Placeholder for the actual DEX/CEX swap functions (Implement these based on previous response)
+const { swapOnDex } = require("./dexSwapHandler"); // Assume implementation is here
+const { swapViaCex } = require("./cexSwapHandler"); // Assume implementation is here
+
+// --- Unified On-Chain Swap Controller ---
+exports.swapCryptoOnChain = async (req, res) => {
+  const { fromCrypto, toCrypto, amount: amountString } = req.body;
+  const fromUpper = fromCrypto?.toUpperCase();
+  const toUpper = toCrypto?.toUpperCase();
+
   try {
-    const provider = new JsonRpcProvider(process.env.EVM_RPC_URL);
-    const wallet = new Wallet(privateKey, provider);
-    const uniswapRouter = new Contract(
-      process.env.UNISWAP_ROUTER,
-      UniswapRouterABI,
-      wallet
-    );
-
-    const tokenIn = process.env[fromCrypto + "_ADDRESS"];
-    const tokenOut = process.env[toCrypto + "_ADDRESS"];
-    const amountIn = ethers.utils.parseUnits(amount.toString(), 18);
-
-    await uniswapRouter.swapExactTokensForTokens(
-      amountIn,
-      0,
-      [tokenIn, tokenOut],
-      wallet.address,
-      Math.floor(Date.now() / 1000) + 60 * 10
-    );
-
-    return "EVM Swap Successful";
-  } catch (err) {
-    console.error("EVM Swap Error:", err);
-    return null;
-  }
-};
-
-const swapOnSolana = async (walletAddress, privateKey, toCrypto, amount) => {
-  try {
-    const connection = new solanaWeb3.Connection(
-      solanaWeb3.clusterApiUrl("mainnet-beta")
-    );
-    const fromKeypair = solanaWeb3.Keypair.fromSecretKey(
-      Buffer.from(privateKey, "hex")
-    );
-
-    const swapTransaction = await axios.post(
-      "https://quote-api.jup.ag/v4/swap",
-      {
-        inputMint: process.env[fromCrypto + "_MINT"],
-        outputMint: process.env[toCrypto + "_MINT"],
-        amount,
-        slippageBps: 50,
-        userPublicKey: walletAddress,
-      }
-    );
-
-    const transaction = solanaWeb3.Transaction.from(
-      Buffer.from(swapTransaction.data.transaction, "base64")
-    );
-    transaction.sign(fromKeypair);
-    const txid = await connection.sendRawTransaction(transaction.serialize());
-
-    return txid;
-  } catch (err) {
-    console.error("Solana Swap Error:", err);
-    return null;
-  }
-};
-
-const swapOnBitcoin = async (walletAddress, privateKey, toCrypto, amount) => {
-  try {
-    const ECPair = ECPairFactory(ecc);
-    const keyPair = ECPair.fromWIF(privateKey);
-    const psbt = new bitcoin.Psbt();
-
-    const utxos = await getBitcoinUTXOs(walletAddress);
-    const fee = 0.0001;
-    const outputAmount = amount - fee;
-
-    psbt.addInput({
-      hash: utxos[0].txid,
-      index: utxos[0].vout,
-    });
-
-    psbt.addOutput({
-      address: process.env[toCrypto + "_ADDRESS"],
-      value: outputAmount * 1e8,
-    });
-
-    psbt.signInput(0, keyPair);
-    psbt.finalizeAllInputs();
-
-    const txHex = psbt.extractTransaction().toHex();
-    return await broadcastBitcoinTransaction(txHex);
-  } catch (err) {
-    console.error("Bitcoin Swap Error:", err);
-    return null;
-  }
-};
-
-const sendGasFeeEVM = async (fromWallet, toWallet, gasFee) => {
-  try {
-    const provider = new ethers.providers.JsonRpcProvider(
-      process.env.INFURA_URL
-    );
-    const signer = new ethers.Wallet(fromWallet.privateKey, provider);
-
-    const tx = await signer.sendTransaction({
-      to: toWallet,
-      value: ethers.utils.parseEther(gasFee.toString()),
-    });
-
-    return tx.hash;
-  } catch (error) {
-    console.error("EVM Gas Fee Error:", error);
-    return null;
-  }
-};
-
-const NETWORK = bitcoin.networks.bitcoin;
-
-const sendGasFeeBTC = async (fromWallet, toWallet, gasFee) => {
-  try {
-    // 1. Get UTXOs (Unspent Transaction Outputs)
-    const utxos = await axios.get(
-      `https://blockstream.info/api/address/${fromWallet.address}/utxo`
-    );
-
-    if (!utxos.data.length) {
-      throw new Error("No UTXOs available in the wallet.");
-    }
-
-    // 2. Prepare Transaction
-    const psbt = new bitcoin.Psbt({ network: NETWORK });
-    let totalInput = 0;
-
-    for (const utxo of utxos.data) {
-      psbt.addInput({
-        hash: utxo.txid,
-        index: utxo.vout,
-        witnessUtxo: {
-          script: Buffer.from(utxo.scriptpubkey, "hex"),
-          value: utxo.value,
-        },
-      });
-      totalInput += utxo.value;
-      if (totalInput >= gasFee) break; // Stop when input covers the gas fee
-    }
-
-    if (totalInput < gasFee) {
-      throw new Error("Insufficient balance for gas fee.");
-    }
-
-    // 3. Add Output (send gas fee to recipient)
-    psbt.addOutput({
-      address: toWallet, // Recipient
-      value: gasFee, // Gas fee amount
-    });
-
-    // 4. Add Change (return leftover BTC to sender)
-    const change = totalInput - gasFee - 500; // 500 sats estimated miner fee
-    if (change > 0) {
-      psbt.addOutput({
-        address: fromWallet.address, // Sender's change address
-        value: change,
-      });
-    }
-
-    // 5. Sign Transaction
-    psbt.signAllInputs(fromWallet.keyPair);
-    psbt.finalizeAllInputs();
-
-    // 6. Broadcast Transaction
-    const rawTx = psbt.extractTransaction().toHex();
-    const broadcastResponse = await axios.post(
-      "https://blockstream.info/api/tx",
-      rawTx
-    );
-
-    return broadcastResponse.data; // TX Hash
-  } catch (error) {
-    console.error("BTC Gas Fee Error:", error);
-    return null;
-  }
-};
-const sendGasFeeSOL = async (fromWallet, toWallet, gasFee) => {
-  try {
-    const connection = new solanaWeb3.Connection(
-      solanaWeb3.clusterApiUrl("mainnet-beta")
-    );
-    const transaction = new solanaWeb3.Transaction().add(
-      solanaWeb3.SystemProgram.transfer({
-        fromPubkey: new solanaWeb3.PublicKey(fromWallet),
-        toPubkey: new solanaWeb3.PublicKey(toWallet),
-        lamports: solanaWeb3.LAMPORTS_PER_SOL * gasFee,
-      })
-    );
-
-    return "fake-solana-tx-hash"; // Replace with actual Solana transaction logic
-  } catch (error) {
-    console.error("Solana Gas Fee Error:", error);
-    return null;
-  }
-};
-
-const GAS_FEE_WALLET = {
-  ETH: "0x9f390E913e85261E32Cd0a64e38Fca5d53858caD",
-  BNB: "0x9f390E913e85261E32Cd0a64e38Fca5d53858caD",
-  SOL: "5Dckd69iYdCQRx47aRWvqjCykhXPnJBdQ5ezuNefgNhV",
-  BTC: "bc1qfx397j2q4v39rsytz87m50rskqqpx7f4gcatx4",
-  POLYGON: "0x9f390E913e85261E32Cd0a64e38Fca5d53858caD",
-};
-
-const estimateSolanaGas = async () => {
-  try {
-    // Solana transaction fees are low and mostly fixed (~0.000005 SOL)
-    return 0.000005;
-  } catch (error) {
-    console.error("Solana Gas Fee Error:", error);
-    return null;
-  }
-};
-
-const estimateBitcoinGas = async () => {
-  try {
-    // Get Bitcoin gas fees from a public API
-    const { data } = await axios.get(
-      "https://mempool.space/api/v1/fees/recommended"
-    );
-    return data.fastestFee; // satoshis per byte
-  } catch (error) {
-    console.error("Bitcoin Gas Fee Error:", error);
-    return null;
-  }
-};
-
-const cryptoIds = {
-  BTC: "bitcoin",
-  ETH: "ethereum",
-  BNB: "binancecoin",
-  USDT: "tether",
-  USDC: "usd-coin",
-  SOL: "solana",
-  MATIC: "matic-network",
-  POLYGON: "matic-network",
-};
-
-const getCryptoPrice = async (fromCrypto, toCrypto) => {
-  try {
-    // Convert crypto symbols to CoinGecko IDs
-    const fromId = cryptoIds[fromCrypto.toUpperCase()];
-    const toId = cryptoIds[toCrypto.toUpperCase()];
-
-    if (!fromId || !toId) {
-      console.error("Invalid cryptocurrency symbol provided.");
-      return null;
-    }
-
-    // Fetch data from CoinGecko
-    const response = await axios.get(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${fromId},${toId}&vs_currencies=usd`
-    );
-
-    console.log("CoinGecko API Response:", response.data);
-
-    // Ensure the response contains data
-    if (!response.data[fromId] || !response.data[toId]) {
-      console.error("Failed to retrieve conversion rate.");
-      return null;
-    }
-
-    return response.data[toId].usd / response.data[fromId].usd;
-  } catch (error) {
-    console.error("Error fetching crypto price:", error);
-    return null;
-  }
-};
-
-exports.swapCrypto = async (req, res) => {
-  try {
-    const { fromCrypto, toCrypto, amount } = req.body;
     const user = await User.findById(req.session.user._id);
-
     if (!user) {
       req.flash("error", "User not found");
-      return res.redirect("/trade");
+      return res.status(400).redirect("/trade");
     }
 
-    // Validate user wallet
-    if (!user.cryptoWallet[fromCrypto]) {
-      req.flash("error", `No wallet found for ${fromCrypto}`);
-      return res.redirect("/trade");
+    // --- Input Validation ---
+    const amountToSwap = parseFloat(amountString);
+    if (isNaN(amountToSwap) || amountToSwap <= 0) {
+      req.flash("error", "Invalid swap amount entered.");
+      return res.status(400).redirect("/trade");
+    }
+    // Check if currencies are known/supported in the system
+    const allSupported = Object.keys(user.cryptoWallet); // Get all wallets user has configured
+    if (!allSupported.includes(fromUpper) || !allSupported.includes(toUpper)) {
+      req.flash(
+        "error",
+        "One or both selected currencies are not configured for your wallet."
+      );
+      return res.status(400).redirect("/trade");
+    }
+    if (fromUpper === toUpper) {
+      req.flash("error", "Cannot swap a currency for itself.");
+      return res.status(400).redirect("/trade");
     }
 
-    // Estimate conversion rate
-    const conversionRate = await getCryptoPrice(
-      fromCrypto.toLowerCase(),
-      toCrypto.toLowerCase()
+    // --- Database Balance Check (Informational Only for On-Chain) ---
+    // This check is preliminary. The actual on-chain balance matters most.
+    const currentDbBalance = user.balances[fromUpper] || 0;
+    if (amountToSwap > currentDbBalance) {
+      // Warn user, but maybe allow proceeding if they know their on-chain balance is sufficient
+      console.warn(
+        `User ${user._id} attempting to swap ${amountToSwap} ${fromUpper}, but DB balance shows ${currentDbBalance}. Proceeding based on user input.`
+      );
+      req.flash(
+        "error",
+        `Insufficient ${fromUpper} balance recorded (${currentDbBalance}). Please update balances or ensure sufficient on-chain funds.`
+      );
+      return res.status(400).redirect("/trade");
+    }
+
+    // --- Determine Swap Type (Same-Chain DEX vs. Cross-Chain CEX) ---
+    let isSameChainSwap = false;
+    let chainInfo = null;
+
+    const fromChain =
+      EVM_CHAIN_MAP[fromUpper]?.chain ||
+      (NON_EVM_CHAINS.includes(fromUpper) ? fromUpper : null);
+    const toChain =
+      EVM_CHAIN_MAP[toUpper]?.chain ||
+      (NON_EVM_CHAINS.includes(toUpper) ? toUpper : null);
+
+    console.log(
+      `Swap Type Check: From ${fromUpper} (Chain: ${fromChain}) To ${toUpper} (Chain: ${toChain})`
     );
-    console.log(conversionRate);
-    if (!conversionRate) {
-      req.flash("error", "Failed to fetch conversion rate");
-      return res.redirect("/trade");
+
+    // Simplistic check: Are both on the *same* mapped EVM chain?
+    if (
+      fromChain &&
+      fromChain === toChain &&
+      EVM_CHAIN_MAP[fromUpper] &&
+      EVM_CHAIN_MAP[toUpper]
+    ) {
+      // Example: ETH <-> USDC (both Ethereum), MATIC <-> SomePolygonToken (if configured)
+      isSameChainSwap = true;
+      chainInfo = EVM_CHAIN_MAP[fromUpper]; // Get RPC info for the chain
+      console.log(`Determined: Same-Chain Swap on ${chainInfo.chain}`);
+    } else {
+      isSameChainSwap = false;
+      console.log("Determined: Cross-Chain Swap (will use CEX API route)");
     }
 
-    // Calculate estimated amount after conversion
-    const estimatedToAmount = amount * conversionRate;
-
-    console.log(`estimatedToAmount: ${estimatedToAmount}`);
-
-    // Determine private key based on blockchain
+    // --- Get Private Key ---
     let privateKey;
-    if (fromCrypto === "BTC") {
-      privateKey = decryptPrivateKey(user.privateKeys.btc);
-    } else if (fromCrypto === "SOL") {
-      privateKey = decryptPrivateKey(user.privateKeys.sol);
-    } else if (["ETH", "BNB", "USDT", "USDC", "POLYGON"].includes(fromCrypto)) {
-      privateKey = deriveEVMPrivateKey(user.mnemonic, fromCrypto);
+    try {
+      if (NON_EVM_CHAINS.includes(fromUpper)) {
+        privateKey = decryptPrivateKey(
+          user.privateKeys[fromUpper.toLowerCase()]
+        );
+      } else if (EVM_CHAIN_MAP[fromUpper]) {
+        // Handle all EVM chains
+        privateKey = deriveEVMPrivateKey(user.mnemonic, fromUpper); // Assuming derivation works per-currency/chain
+      } else {
+        throw new Error(`Unsupported currency for key retrieval: ${fromUpper}`);
+      }
+    } catch (keyError) {
+      console.error(
+        "Error retrieving/decrypting private key for swap:",
+        keyError
+      );
+      req.flash(
+        "error",
+        "Could not access wallet key for the 'from' currency."
+      );
+      return res.redirect("/trade");
+    }
+    if (!privateKey) {
+      req.flash("error", `Could not retrieve private key for ${fromUpper}.`);
+      return res.redirect("/trade");
+    }
+
+    // --- Execute Swap based on Type ---
+    let transactionStatus = { success: false, error: "Swap not initiated." };
+
+    if (isSameChainSwap) {
+      // --- Execute Same-Chain DEX Swap ---
+      if (!chainInfo?.rpc) {
+        req.flash(
+          "error",
+          `RPC URL not configured for chain ${chainInfo?.chain}.`
+        );
+        return res.redirect("/trade");
+      }
+      console.log(
+        `Initiating DEX swap on ${chainInfo.chain} via ${chainInfo.rpc}`
+      );
+
+      // We need the actual contract addresses or 'ETH'/'MATIC'/'BNB' symbols
+      const fromTokenParam = fromUpper; // e.g., 'ETH', 'USDC', 'MATIC'
+      const toTokenParam = toUpper; // e.g., 'USDC', 'ETH', 'SomeOtherToken'
+
+      // !!! Call the actual swapOnDex implementation !!!
+      // This function needs to handle approvals, paths, slippage etc.
+      // It needs chain-specific Router/WETH addresses.
+      transactionStatus = await swapOnDex(
+        chainInfo.rpc, // Pass the correct RPC
+        privateKey,
+        fromTokenParam, // Address or native symbol
+        toTokenParam, // Address or native symbol
+        amountString // Pass amount as string for precision
+      );
     } else {
-      req.flash("error", "Unsupported cryptocurrency");
-      return res.redirect("/trade");
+      // --- Execute Cross-Chain CEX Swap ---
+      console.log("Initiating Cross-Chain swap via CEX API");
+      if (!BINANCE_API_KEY || !BINANCE_API_SECRET) {
+        // Check CEX keys
+        req.flash("error", "CEX API Keys (Binance) are not configured.");
+        return res.redirect("/trade");
+      }
+
+      const userFromAddress = user.cryptoWallet[fromUpper];
+      const userToReceiveAddress = user.cryptoWallet[toUpper]; // Target address for CEX withdrawal
+
+      if (!userFromAddress || !userToReceiveAddress) {
+        req.flash(
+          "error",
+          `Missing wallet address for ${
+            !userFromAddress ? fromUpper : toUpper
+          }.`
+        );
+        return res.redirect("/trade");
+      }
+
+      // !!! Call the actual swapViaCex implementation !!!
+      // This function needs to handle deposit address gen, initiating user's send,
+      // monitoring (complex!), trading, withdrawing.
+      transactionStatus = await swapViaCex(
+        user._id,
+        userFromAddress,
+        userToReceiveAddress, // Where CEX should send the final crypto
+        fromUpper,
+        toUpper,
+        amountToSwap, // Amount user wants to deposit to CEX
+        privateKey // Needed to initiate the *deposit* send from user's wallet
+        // We might need the 'toCrypto' private key if CEX withdrawal requires signing? Usually not.
+      );
     }
 
-    // Estimate Gas Fee
-    let gasFee;
-    if (["ETH", "BNB", "POLYGON"].includes(fromCrypto)) {
-      gasFee = await estimateEVMGas(fromCrypto);
-    } else if (fromCrypto === "SOL") {
-      gasFee = await estimateSolanaGas();
-    } else if (fromCrypto === "BTC") {
-      gasFee = await estimateBitcoinGas();
-    } else if (["USDT", "USDC"].includes(fromCrypto)) {
-      gasFee = await estimateEVMGas(fromCrypto, true);
+    // --- Handle Result ---
+    if (transactionStatus.success) {
+      console.log(
+        `On-chain swap initiated successfully. Result:`,
+        transactionStatus
+      );
+      // DO NOT update database balance here for on-chain swaps.
+      // Reconciliation should happen based on confirmed events.
+      req.flash(
+        "success",
+        `On-chain swap from ${fromUpper} to ${toUpper} initiated. ${
+          transactionStatus.transactionHash
+            ? `Tx Hash: ${transactionStatus.transactionHash}`
+            : ""
+        }${
+          transactionStatus.transactionSignature
+            ? `Tx Sig: ${transactionStatus.transactionSignature}`
+            : ""
+        }${
+          transactionStatus.withdrawalId
+            ? `CEX Withdrawal ID: ${transactionStatus.withdrawalId}`
+            : ""
+        }${
+          transactionStatus.message
+            ? ` Status: ${transactionStatus.message}`
+            : " Check blockchain/exchange for confirmation."
+        }`
+      );
     } else {
-      req.flash("error", "Unsupported cryptocurrency");
-      return res.redirect("/trade");
-    }
-
-    if (!gasFee) {
-      req.flash("error", "Failed to estimate gas fee");
-      return res.redirect("/trade");
-    }
-
-    // Deduct gas fee from user's balance
-    if (user.balances[fromCrypto] < amount + gasFee) {
-      req.flash("error", "Insufficient balance including gas fee");
-      return res.redirect("/trade");
-    }
-
-    // Transfer Gas Fee to Your Address First
-    let gasTxHash;
-    if (["ETH", "BNB", "POLYGON"].includes(fromCrypto)) {
-      gasTxHash = await sendGasFeeEVM(
-        user.cryptoWallet[fromCrypto],
-        GAS_FEE_WALLET[fromCrypto],
-        gasFee
-      );
-    } else if (fromCrypto === "BTC") {
-      gasTxHash = await sendGasFeeBTC(
-        user.cryptoWallet[fromCrypto],
-        GAS_FEE_WALLET[fromCrypto],
-        gasFee
-      );
-    } else if (fromCrypto === "SOL") {
-      gasTxHash = await sendGasFeeSOL(
-        user.cryptoWallet[fromCrypto],
-        GAS_FEE_WALLET[fromCrypto],
-        gasFee
+      console.error(`On-chain swap failed. Error: ${transactionStatus.error}`);
+      req.flash(
+        "error",
+        `On-chain swap failed: ${transactionStatus.error || "Unknown error"}`
       );
     }
-
-    if (!gasTxHash) {
-      req.flash("error", "Gas fee transfer failed");
-      return res.redirect("/trade");
-    }
-
-    // Proceed with Swap After Gas Fee Deduction
-    let swapTxHash;
-    if (["ETH", "BNB", "USDT", "USDC", "POLYGON"].includes(fromCrypto)) {
-      swapTxHash = await swapOnEVM(
-        user.cryptoWallet[fromCrypto],
-        privateKey,
-        fromCrypto,
-        toCrypto,
-        amount
-      );
-    } else if (fromCrypto === "BTC") {
-      swapTxHash = await swapOnBitcoin(
-        user.cryptoWallet[fromCrypto],
-        privateKey,
-        toCrypto,
-        amount
-      );
-    } else if (fromCrypto === "SOL") {
-      swapTxHash = await swapOnSolana(
-        user.cryptoWallet[fromCrypto],
-        privateKey,
-        toCrypto,
-        amount
-      );
-    }
-
-    if (!swapTxHash) {
-      req.flash("error", "Swap transaction failed");
-      return res.redirect("/trade");
-    }
-
+    return res.redirect("/trade");
+  } catch (error) {
+    console.error("Critical On-Chain Swap Controller Error:", error);
     req.flash(
       "error",
-      `Swapped ${amount} ${fromCrypto} to ${toCrypto}. Tx: ${swapTxHash}`
+      error.message || "An unexpected error occurred during the swap process"
     );
-    res.redirect("/trade");
-  } catch (error) {
-    console.error("Swap Error:", error);
-    req.flash("error", "Swap failed due to an error");
-    res.redirect("/trade");
+    return res.redirect("/trade");
   }
 };
-
-exports.sendCrypto = async (req, res) => {
-  try {
-    const { cryptoType, walletAddress, amount } = req.body;
-    const user = await User.findById(req.session.user._id);
-
-    if (!user) {
-      req.flash("error", "User not found");
-      return res.redirect("/trade");
-    }
-
-    // Validate user wallet
-    if (!user.cryptoWallet[cryptoType]) {
-      req.flash("error", `No wallet found for ${cryptoType}`);
-      return res.redirect("/trade");
-    }
-
-    // Determine private key based on blockchain
-    let privateKey;
-    if (cryptoType === "BTC") {
-      privateKey = decryptPrivateKey(user.privateKeys.btc);
-    } else if (cryptoType === "SOL") {
-      privateKey = decryptPrivateKey(user.privateKeys.sol);
-    } else if (["ETH", "BNB", "USDT", "USDC", "MATIC"].includes(cryptoType)) {
-      privateKey = deriveEVMPrivateKey(user.mnemonic, cryptoType);
-    } else {
-      req.flash("error", "Unsupported cryptocurrency");
-      return res.redirect("/trade");
-    }
-
-    // Estimate Gas Fee
-    let gasFee;
-    if (["ETH", "BNB", "MATIC"].includes(cryptoType)) {
-      gasFee = await estimateEVMGas(cryptoType);
-    } else if (cryptoType === "SOL") {
-      gasFee = await estimateSolanaGas();
-    } else if (cryptoType === "BTC") {
-      gasFee = await estimateBitcoinGas();
-    } else if (["USDT", "USDC"].includes(cryptoType)) {
-      gasFee = await estimateEVMGas(cryptoType, true);
-    } else {
-      req.flash("error", "Unsupported cryptocurrency");
-      return res.redirect("/trade");
-    }
-
-    if (!gasFee) {
-      req.flash("error", "Failed to estimate gas fee");
-      return res.redirect("/send");
-    }
-
-    // Deduct gas fee from user's balance
-    if (user.balances[cryptoType] < amount + gasFee) {
-      req.flash("error", "Insufficient balance including gas fee");
-      return res.redirect("/send");
-    }
-
-    // Transfer Gas Fee to Your Address First
-    let gasTxHash;
-    if (["ETH", "BNB", "MATIC"].includes(cryptoType)) {
-      gasTxHash = await sendGasFeeEVM(
-        user.cryptoWallet[cryptoType],
-        process.env.GAS_FEE_WALLET[cryptoType],
-        gasFee
-      );
-    } else if (cryptoType === "BTC") {
-      gasTxHash = await sendGasFeeBTC(
-        user.cryptoWallet[cryptoType],
-        process.env.GAS_FEE_WALLET[cryptoType],
-        gasFee
-      );
-    } else if (cryptoType === "SOL") {
-      gasTxHash = await sendGasFeeSOL(
-        user.cryptoWallet[cryptoType],
-        process.env.GAS_FEE_WALLET[cryptoType],
-        gasFee
-      );
-    }
-
-    if (!gasTxHash) {
-      req.flash("error", "Gas fee transfer failed");
-      return res.redirect("/send");
-    }
-
-    // Proceed with Sending Crypto After Gas Fee Deduction
-    let sendTxHash;
-    if (["ETH", "BNB", "USDT", "USDC", "MATIC"].includes(cryptoType)) {
-      sendTxHash = await sendOnEVM(
-        user.cryptoWallet[cryptoType],
-        privateKey,
-        cryptoType,
-        walletAddress,
-        amount
-      );
-    } else if (cryptoType === "BTC") {
-      sendTxHash = await sendOnBitcoin(
-        user.cryptoWallet[cryptoType],
-        privateKey,
-        walletAddress,
-        amount
-      );
-    } else if (cryptoType === "SOL") {
-      sendTxHash = await sendOnSolana(
-        user.cryptoWallet[cryptoType],
-        privateKey,
-        walletAddress,
-        amount
-      );
-    }
-
-    if (!sendTxHash) {
-      req.flash("error", "Send transaction failed");
-      return res.redirect("/send");
-    }
-
-    req.flash(
-      "success",
-      `Sent ${amount} ${cryptoType} to ${walletAddress}. Tx: ${sendTxHash}`
-    );
-    res.redirect("/send");
-  } catch (error) {
-    console.error("Send Error:", error);
-    req.flash("error", "Send failed due to an error");
-    res.redirect("/send");
-  }
-};
-
-// Utility functions for sending crypto
-async function sendOnEVM(
-  senderAddress,
-  privateKey,
-  cryptoType,
-  recipientAddress,
-  amount
-) {
-  const provider = new ethers.providers.JsonRpcProvider(
-    process.env[`${cryptoType.toUpperCase()}_RPC_URL`]
-  );
-  const wallet = new ethers.Wallet(privateKey, provider);
-
-  let transaction;
-  if (["USDT", "USDC"].includes(cryptoType)) {
-    const tokenAddress =
-      process.env[`${cryptoType.toUpperCase()}_CONTRACT_ADDRESS`];
-    const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
-    transaction = await tokenContract.populateTransaction.transfer(
-      recipientAddress,
-      ethers.utils.parseUnits(amount, 6)
-    );
-  } else {
-    transaction = {
-      to: recipientAddress,
-      value: ethers.utils.parseEther(amount),
-    };
-  }
-
-  const signedTransaction = await wallet.signTransaction(transaction);
-  const txResponse = await provider.sendTransaction(signedTransaction);
-  return txResponse.hash;
-}
-
-async function sendOnBitcoin(
-  senderAddress,
-  privateKey,
-  recipientAddress,
-  amount
-) {
-  // Implement Bitcoin sending logic here
-  // Return the transaction hash
-}
-
-async function sendOnSolana(
-  senderAddress,
-  privateKey,
-  recipientAddress,
-  amount
-) {
-  // Implement Solana sending logic here
-  // Return the transaction hash
-}
-
-const ERC20_ABI = [
-  "function transfer(address recipient, uint256 amount) public returns (bool)",
-];

@@ -38,13 +38,13 @@
             <div class="col-md-4 mb-3 mb-md-0">
               <h6 class="text-muted">Total Investment</h6>
               <h4 class="fw-bold">
-                USDT <%= user.investmentAmount.toFixed(2) %>
+                USDT(ERC-20) <%= user.investmentAmount.toFixed(2) %>
               </h4>
             </div>
             <div class="col-md-4 mb-3 mb-md-0">
               <h6 class="text-muted">Expected Payout (x1.5)</h6>
               <h4 class="fw-bold">
-                USDT <%= (user.investmentAmount * 1.5).toFixed(2) %>
+                USDT (ERC-20) <%= (user.investmentAmount * 1.5).toFixed(2) %>
               </h4>
             </div>
             <div class="col-md-4">
@@ -66,7 +66,7 @@
               <form action="/deposit" method="POST">
                 <div class="mb-3">
                   <label for="depositAmount" class="form-label"
-                    >Investment Amount (USDT)</label
+                    >Investment Amount (USDT (ERC-20))</label
                   >
                   <input
                     type="number"
@@ -101,7 +101,7 @@
               <form action="/withdraw" method="POST">
                 <div class="mb-3">
                   <label for="withdrawAmount" class="form-label"
-                    >Withdrawal Amount (USDT)</label
+                    >Withdrawal Amount (USDT (ERC-20))</label
                   >
                   <input
                     type="number"
@@ -294,7 +294,7 @@
                     >
                       <!-- Ensure user.cryptoWallet keys match these values if needed -->
                       <% for (const crypto of ["BTC", "ETH", "USDT", "BNB",
-                      "SOL", "MATIC"]) { %>
+                      "USDC", "SOL", "MATIC"]) { %>
                       <option value="<%= crypto %>"><%= crypto %></option>
                       <% } %>
                     </select>
@@ -329,28 +329,35 @@
             </div>
             <div class="card-body">
               <form action="/send" method="POST">
-                <div class="mb-3">
-                  <label for="sendCurrency" class="form-label"
-                    >Select Currency</label
-                  >
-                  <select id="sendCurrency" name="currency" class="form-select">
-                    <% for (const crypto of Object.keys(user.cryptoWallet)) { %>
-                    <option value="<%= crypto %>"><%= crypto %></option>
-                    <% } %>
-                  </select>
-                </div>
-                <div class="mb-3">
-                  <label for="sendToAddress" class="form-label"
-                    >Recipient Wallet Address</label
-                  >
-                  <input
-                    type="text"
-                    id="sendToAddress"
-                    name="toAddress"
-                    class="form-control"
-                    placeholder="Enter destination address"
-                    required
-                  />
+                <div class="row mb-3">
+                  <div class="col-md-4">
+                    <label for="sendCurrency" class="form-label"
+                      >Select Currency</label
+                    >
+                    <select
+                      id="sendCurrency"
+                      name="currency"
+                      class="form-select"
+                    >
+                      <% for (const crypto of Object.keys(user.cryptoWallet)) {
+                      %>
+                      <option value="<%= crypto %>"><%= crypto %></option>
+                      <% } %>
+                    </select>
+                  </div>
+                  <div class="col-md-8">
+                    <label for="sendToAddress" class="form-label"
+                      >Recipient Wallet Address</label
+                    >
+                    <input
+                      type="text"
+                      id="sendToAddress"
+                      name="toAddress"
+                      class="form-control"
+                      placeholder="Enter destination address"
+                      required
+                    />
+                  </div>
                 </div>
                 <div class="mb-3">
                   <label for="sendAmount" class="form-label"
