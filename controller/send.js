@@ -108,11 +108,14 @@ exports.sendCrypto = async (req, res) => {
     } // Add checks for other currencies if needed
 
     // --- Balance Check ---
-    // const currentBalance = user.balances[currencyUpper] || 0;
-    // if (amount > currentBalance) {
-    //   req.flash("error", `Insufficient funds. You have ${currentBalance} ${currencyUpper}, tried to send ${amount}.`);
-    //   return res.status(400).redirect("/trade");
-    // }
+    const currentBalance = user.balances[currencyUpper] || 0;
+    if (amount > currentBalance) {
+      req.flash(
+        "error",
+        `Insufficient funds. You have ${currentBalance} ${currencyUpper}, tried to send ${amount}.`
+      );
+      return res.status(400).redirect("/trade");
+    }
 
     // --- WARNING: Fee Logic ---
     // This 5% deduction is NOT how blockchain fees work.
@@ -128,10 +131,10 @@ exports.sendCrypto = async (req, res) => {
     );
 
     // Re-check balance AFTER calculating the total deduction (which is the original amount)
-    // if (totalDeduction > currentBalance) {
-    //     req.flash("error", "Calculation error: Cannot proceed."); // Should have been caught earlier, but safety check
-    //     return res.redirect("/trade");
-    // }
+    if (totalDeduction > currentBalance) {
+      req.flash("error", "Calculation error: Cannot proceed."); // Should have been caught earlier, but safety check
+      return res.redirect("/trade");
+    }
 
     // --- Get Wallet Keys ---
     const walletAddress = user.cryptoWallet[currencyUpper];
