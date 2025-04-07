@@ -30,3 +30,171 @@
     display: none;
   }
 }
+
+/* Custom Styles for Enhanced Dashboard */
+body {
+  background-color: #f8f9fa; /* Lighter overall background */
+}
+
+.main {
+  padding-bottom: 3rem; /* Add padding at the bottom */
+}
+
+.card {
+  border: none; /* Remove default card borders */
+  border-radius: 0.5rem; /* Slightly more rounded corners */
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); /* Subtle shadow */
+  margin-bottom: 1.5rem; /* Consistent bottom margin for cards */
+}
+
+.card-header {
+  background-color: #0d6efd; /* Your primary blue color */
+  color: white;
+  font-weight: 500;
+  border-bottom: none; /* Remove border below header */
+  border-radius: 0.5rem 0.5rem 0 0 !important; /* Match card rounding */
+  padding: 0.75rem 1.25rem;
+}
+/* Specific header for summary */
+.summary-card .card-header {
+  background-color: #0a58ca; /* Slightly darker blue for emphasis */
+}
+
+.card-body {
+  padding: 1.5rem; /* More padding inside card body */
+}
+
+/* Wallet Balance List */
+.balance-list .list-group-item {
+  border: none; /* Remove borders between items */
+  padding: 0.75rem 0; /* Adjust vertical padding, remove horizontal */
+  border-bottom: 1px solid #eee; /* Add subtle separator */
+}
+.balance-list .list-group-item:last-child {
+  border-bottom: none; /* Remove last separator */
+}
+
+.crypto-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 0.75rem;
+  vertical-align: middle;
+}
+/* Specific colors for common crypto icons (add more as needed) */
+.fa-btc {
+  color: #f7931a;
+}
+.fa-ethereum {
+  color: #627eea;
+}
+.fa-dollar-sign {
+  color: #26a17b;
+} /* For USDT */
+.fa-cube {
+  color: #f0b90b;
+} /* Placeholder for BNB */
+.fa-wave-square {
+  color: #00ffa3;
+} /* Placeholder for SOL */
+.fa-draw-polygon {
+  color: #8247e5;
+} /* Placeholder for Polygon/MATIC */
+
+.balance-address {
+  font-size: 0.8em;
+  color: #6c757d; /* Muted color */
+  display: block; /* Put address on new line */
+  margin-left: calc(24px + 0.75rem); /* Align with text, not icon */
+  word-break: break-all; /* Prevent long addresses from breaking layout */
+}
+
+.balance-amount {
+  font-weight: 500;
+  text-align: right;
+}
+.balance-amount span {
+  font-size: 0.85em;
+  color: #6c757d;
+  margin-left: 0.25rem;
+}
+
+/* Forms */
+.form-label {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #495057;
+}
+
+.form-control,
+.form-select {
+  border-radius: 0.375rem; /* Standard Bootstrap rounding */
+}
+
+/* Buttons */
+.btn {
+  padding: 0.5rem 1rem; /* Slightly larger buttons */
+  font-weight: 500;
+}
+.btn i {
+  margin-right: 0.35rem;
+}
+
+/* Adjust column padding */
+.row > [class*="col-"] {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+.row {
+  margin-left: -0.75rem;
+  margin-right: -0.75rem;
+}
+
+/* Preloader styles (keep as is) */
+.preloader {
+  /* Ensure it's visible */
+  position: fixed;
+  z-index: 1030;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loader {
+  /* Add your loader styles here */
+}
+.line-scale > div {
+  background-color: #0d6efd; /* Match primary */
+  width: 4px;
+  height: 35px;
+  border-radius: 2px;
+  margin: 2px;
+  animation-fill-mode: both;
+  display: inline-block;
+  animation: line-scale 1s 0s infinite cubic-bezier(0.2, 0.68, 0.18, 1.08);
+}
+.line-scale > div:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.line-scale > div:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.line-scale > div:nth-child(4) {
+  animation-delay: 0.3s;
+}
+.line-scale > div:nth-child(5) {
+  animation-delay: 0.4s;
+}
+@keyframes line-scale {
+  0%,
+  40%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  20% {
+    transform: scaleY(1);
+  }
+}

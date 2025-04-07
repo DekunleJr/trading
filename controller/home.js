@@ -67,108 +67,284 @@ exports.getContact = async (req, res, next) => {
     next(new Error(err));
   }
 };
+const erc20Abi = ["function balanceOf(address owner) view returns (uint256)"];
 
 exports.getTrade = async (req, res, next) => {
+  let user;
+
   try {
     const userId = req.session.user._id;
-    const user = await User.findById(userId);
+    user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).send("User not found");
+      // Handle user not found before attempting balance fetches
+      req.flash("error", "User not found. Please log in again.");
+      return res.redirect("/login");
     }
 
-    const balances = {};
+    const currentBalances = {
+      BTC: user.balances?.BTC ?? 0,
+      ETH: user.balances?.ETH ?? 0,
+      BNB: user.balances?.BNB ?? 0,
+      SOL: user.balances?.SOL ?? 0,
+      USDT: user.balances?.USDT ?? 0,
+      POLYGON: user.balances?.POLYGON ?? 0,
+      USDC: user.balances?.USDC ?? 0,
+    };
 
-    // Fetch ETH & USDT (ERC-20) balance
-    const provider = new ethers.providers.JsonRpcProvider(
-      process.env.INFURA_API
-    );
-    if (user.cryptoWallet.ETH) {
-      const ethBalance = await provider.getBalance(user.cryptoWallet.ETH);
-      balances.ETH = parseFloat(ethers.utils.formatEther(ethBalance));
+    const liveBalances = {};
+
+    // --- Attempt to fetch live balances individually ---
+
+    // Fetch ETH Balance
+    try {
+      if (user.cryptoWallet?.ETH && process.env.INFURA_API) {
+        const provider = new ethers.providers.JsonRpcProvider(
+          process.env.INFURA_API
+        );
+        const ethBalanceWei = await provider.getBalance(user.cryptoWallet.ETH);
+        liveBalances.ETH = parseFloat(ethers.utils.formatEther(ethBalanceWei));
+        console.log(`Successfully fetched ETH balance for ${userId}`);
+      } else if (!user.cryptoWallet?.ETH) {
+        console.log(
+          `Skipping ETH fetch: No ETH wallet address for user ${userId}`
+        );
+      } else {
+        console.warn(`Skipping ETH fetch: INFURA_API key not configured.`);
+      }
+    } catch (err) {
+      console.error(
+        `Failed to fetch ETH balance for ${userId}: ${err.message} (Code: ${err.code})`
+      );
+      // Keep the balance from DB (already in currentBalances)
     }
 
-    // Fetch BNB balance (BSC network)
-    const bscProvider = new ethers.providers.JsonRpcProvider(
-      "https://bsc-dataseed.binance.org/"
-    );
-    if (user.cryptoWallet.BNB) {
-      const bnbBalance = await bscProvider.getBalance(user.cryptoWallet.BNB);
-      balances.BNB = parseFloat(ethers.utils.formatEther(bnbBalance));
+    // Fetch BNB balance
+    try {
+      if (user.cryptoWallet?.BNB) {
+        const bscProvider = new ethers.providers.JsonRpcProvider(
+          "https://bsc-dataseed.binance.org/"
+        );
+        const bnbBalanceWei = await bscProvider.getBalance(
+          user.cryptoWallet.BNB
+        );
+        liveBalances.BNB = parseFloat(ethers.utils.formatEther(bnbBalanceWei));
+        console.log(`Successfully fetched BNB balance for ${userId}`);
+      } else {
+        console.log(
+          `Skipping BNB fetch: No BNB wallet address for user ${userId}`
+        );
+      }
+    } catch (err) {
+      console.error(
+        `Failed to fetch BNB balance for ${userId}: ${err.message} (Code: ${err.code})`
+      );
     }
 
     // Fetch USDT Balance (ERC-20 Token)
-    if (user.cryptoWallet.USDT) {
-      const usdtContract = new ethers.Contract(
-        process.env.USDT_CONTRACT_ADDRESS,
-        ["function balanceOf(address owner) view returns (uint256)"],
-        provider
+    try {
+      if (
+        user.cryptoWallet?.USDT &&
+        process.env.USDT_CONTRACT_ADDRESS &&
+        process.env.INFURA_API
+      ) {
+        const provider = new ethers.providers.JsonRpcProvider(
+          process.env.INFURA_API
+        ); // Reuse provider if INFURA is needed
+        const usdtContract = new ethers.Contract(
+          process.env.USDT_CONTRACT_ADDRESS,
+          ["function balanceOf(address owner) view returns (uint256)"],
+          provider
+        );
+        const usdtBalanceUnits = await usdtContract.balanceOf(
+          user.cryptoWallet.USDT
+        );
+        // Assuming USDT has 6 decimals
+        liveBalances.USDT = parseFloat(
+          ethers.utils.formatUnits(usdtBalanceUnits, 6)
+        );
+        console.log(`Successfully fetched USDT balance for ${userId}`);
+      } else if (!user.cryptoWallet?.USDT) {
+        console.log(
+          `Skipping USDT fetch: No USDT wallet address for user ${userId}`
+        );
+      } else {
+        console.warn(
+          `Skipping USDT fetch: Missing USDT_CONTRACT_ADDRESS or INFURA_API env variables.`
+        );
+      }
+    } catch (err) {
+      console.error(
+        `Failed to fetch USDT balance for ${userId}: ${err.message} (Code: ${err.code})`
       );
-      const usdtBalance = await usdtContract.balanceOf(user.cryptoWallet.USDT);
-      balances.USDT = parseFloat(ethers.utils.formatUnits(usdtBalance, 6));
+    }
+
+    // Fetch USDC Balance (ERC-20 Token) - NEW
+    try {
+      if (
+        user.cryptoWallet?.USDC &&
+        process.env.USDC_CONTRACT_ADDRESS &&
+        process.env.INFURA_API
+      ) {
+        const provider = new ethers.providers.JsonRpcProvider(
+          process.env.INFURA_API
+        );
+        // Check provider
+        const usdcContract = new ethers.Contract(
+          process.env.USDC_CONTRACT_ADDRESS,
+          erc20Abi, // Use defined ABI
+          provider
+        );
+        // Often the same address as ETH/USDT, but use the specific field
+        const usdcBalanceUnits = await usdcContract.balanceOf(
+          user.cryptoWallet.USDC
+        );
+        liveBalances.USDC = parseFloat(
+          ethers.utils.formatUnits(usdcBalanceUnits, 6)
+        );
+        console.log(`Successfully fetched USDC balance for ${userId}`);
+      } else if (!user.cryptoWallet?.USDC) {
+        console.log(
+          `Skipping USDC fetch: No USDC wallet address for user ${userId}`
+        );
+      } else {
+        console.warn(
+          `Skipping USDC fetch: Missing USDC_CONTRACT_ADDRESS env variable or INFURA_API key.`
+        );
+      }
+    } catch (err) {
+      console.error(
+        `Failed to fetch USDC balance for ${userId}: ${err.message} (Code: ${err.code})`
+      );
     }
 
     // Fetch SOL balance
-    if (user.cryptoWallet.SOL) {
-      const solanaConnection = new Connection(
-        "https://api.mainnet-beta.solana.com"
+    try {
+      if (user.cryptoWallet?.SOL) {
+        const solanaConnection = new Connection(
+          "https://api.mainnet-beta.solana.com"
+        );
+        const solPublicKey = new PublicKey(user.cryptoWallet.SOL);
+        const solBalanceLamports = await solanaConnection.getBalance(
+          solPublicKey
+        );
+        liveBalances.SOL = solBalanceLamports / 1e9; // Convert lamports to SOL
+        console.log(`Successfully fetched SOL balance for ${userId}`);
+      } else {
+        console.log(
+          `Skipping SOL fetch: No SOL wallet address for user ${userId}`
+        );
+      }
+    } catch (err) {
+      console.error(
+        `Failed to fetch SOL balance for ${userId}: ${err.message}`
       );
-      const solPublicKey = new PublicKey(user.cryptoWallet.SOL);
-      const solBalance = await solanaConnection.getBalance(solPublicKey);
-      balances.SOL = solBalance / 1e9; // Convert lamports to SOL
     }
 
-    // ✅ Fetch BTC Balance
-    if (user.cryptoWallet.BTC) {
-      const btcResponse = await axios.get(
-        `https://blockchain.info/q/addressbalance/${user.cryptoWallet.BTC}`
-      );
-      balances.BTC = btcResponse.data / 1e8;
+    // Fetch BTC Balance
+    try {
+      if (user.cryptoWallet?.BTC) {
+        const btcResponse = await axios.get(
+          `https://blockchain.info/q/addressbalance/${user.cryptoWallet.BTC}`
+        );
+        // Ensure data exists and is a number before division
+        if (typeof btcResponse.data === "number") {
+          liveBalances.BTC = btcResponse.data / 1e8;
+          console.log(`Successfully fetched BTC balance for ${userId}`);
+        } else {
+          console.error(
+            `Failed to fetch BTC balance for ${userId}: Invalid response data type - ${typeof btcResponse.data}`
+          );
+        }
+      } else {
+        console.log(
+          `Skipping BTC fetch: No BTC wallet address for user ${userId}`
+        );
+      }
+    } catch (err) {
+      // Axios errors often have response details
+      const errorMsg = err.response
+        ? `${err.message} (Status: ${err.response.status})`
+        : err.message;
+      console.error(`Failed to fetch BTC balance for ${userId}: ${errorMsg}`);
     }
 
-    // ✅ Fetch Polygon (MATIC) Balance
-    const polygonProvider = new ethers.providers.JsonRpcProvider(
-      "https://polygon-rpc.com"
-    );
-    if (user.cryptoWallet.POLYGON) {
-      const maticBalance = await polygonProvider.getBalance(
-        user.cryptoWallet.POLYGON
+    // Fetch Polygon (MATIC) Balance
+    try {
+      if (user.cryptoWallet?.POLYGON) {
+        const polygonProvider = new ethers.providers.JsonRpcProvider(
+          "https://polygon-rpc.com"
+        );
+        const maticBalanceWei = await polygonProvider.getBalance(
+          user.cryptoWallet.POLYGON
+        );
+        liveBalances.POLYGON = parseFloat(
+          ethers.utils.formatEther(maticBalanceWei)
+        );
+        console.log(`Successfully fetched MATIC balance for ${userId}`);
+      } else {
+        console.log(
+          `Skipping MATIC fetch: No POLYGON wallet address for user ${userId}`
+        );
+      }
+    } catch (err) {
+      console.error(
+        `Failed to fetch MATIC balance for ${userId}: ${err.message} (Code: ${err.code})`
       );
-      balances.POLYGON = parseFloat(ethers.utils.formatEther(maticBalance));
     }
 
-    // ✅ Save updated balances to the database
-    user.balances = {
-      BTC: balances.BTC || 0,
-      ETH: balances.ETH || 0,
-      BNB: balances.BNB || 0,
-      SOL: balances.SOL || 0,
-      USDT: balances.USDT || 0,
-      POLYGON: balances.POLYGON || 0,
+    // --- Merge live balances with DB balances ---
+    // Live data takes precedence over potentially stale DB data
+    const finalBalances = {
+      ...currentBalances,
+      ...liveBalances,
     };
-    await user.save();
 
-    // Calculate payout date
-    const payoutDate = new Date(user.investmentDate);
-    payoutDate.setMonth(payoutDate.getMonth() + 1);
+    // --- Save updated balances back to the database (best effort) ---
+    // Only save if there were actual changes or if balances were initially missing
+    const hasChanges =
+      JSON.stringify(user.balances) !== JSON.stringify(finalBalances);
+    if (hasChanges) {
+      user.balances = finalBalances;
+      try {
+        await user.save();
+        console.log(`Updated balances saved to DB for user ${userId}`);
+      } catch (saveError) {
+        console.error(
+          `Failed to save updated balances for user ${userId}: ${saveError.message}`
+        );
+      }
+    }
+
+    // --- Prepare data for rendering ---
+    let payoutDateStr = "N/A";
+    if (user.investmentDate) {
+      const payoutDate = new Date(user.investmentDate);
+      payoutDate.setMonth(payoutDate.getMonth() + 1);
+      payoutDateStr = payoutDate.toDateString();
+    } else {
+      console.log(`User ${userId} does not have an investmentDate set.`);
+    }
 
     const message = req.flash("error")[0] || req.flash("success")[0] || null;
 
+    // --- Render the page ---
     res.render("trade", {
       path: "/trade",
       pageTitle: "My Trade",
       errorMessage: message,
+      csrfToken: req.csrfToken(),
       user: {
         fulname: user.fulname,
         email: user.email,
-        investmentAmount: user.investmentAmount,
-        payoutDate: payoutDate.toDateString(),
-        cryptoWallet: user.cryptoWallet,
-        balances,
+        investmentAmount: user.investmentAmount || 0,
+        payoutDate: payoutDateStr,
+        cryptoWallet: user.cryptoWallet || {},
+        balances: finalBalances,
       },
     });
   } catch (err) {
-    console.error("Error fetching wallet balances:", err);
+    console.error("Critical error in getTrade controller:", err);
     next(new Error(err));
   }
 };
