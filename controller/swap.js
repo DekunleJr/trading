@@ -7,7 +7,7 @@ const axios = require("axios");
 const bitcoin = require("bitcoinjs-lib");
 const { ECPairFactory } = require("ecpair");
 const ecc = require("tiny-secp256k1");
-const Binance = require("node-binance-api"); // Assuming you use this for CEX
+// const Binance = require("node-binance-api"); // Assuming you use this for CEX
 
 const User = require("../model/user");
 const {
@@ -36,7 +36,7 @@ const { swapOnDex } = require("./dexSwapHandler"); // Assume implementation is h
 const { swapViaCex } = require("./cexSwapHandler"); // Assume implementation is here
 
 // --- Unified On-Chain Swap Controller ---
-exports.swapCryptoOnChain = async (req, res) => {
+exports.swapCrypto = async (req, res) => {
   const { fromCrypto, toCrypto, amount: amountString } = req.body;
   const fromUpper = fromCrypto?.toUpperCase();
   const toUpper = toCrypto?.toUpperCase();
