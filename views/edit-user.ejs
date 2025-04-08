@@ -2,21 +2,55 @@
 
 <body>
   <%- include('includes/nav.ejs') %>
-  <main>
-    <section class="container">
-      <div class="row">
-        <div class="col-6">
-          <div class="mb-3">
-            <h2>Edit Details</h2>
+  <main class="flex-grow-1">
+    <!-- Ensure main takes up space -->
+    <section class="container py-5">
+      <!-- Add padding -->
+      <div class="row justify-content-center">
+        <!-- Center the column -->
+        <div class="col-md-8 col-lg-6">
+          <!-- Adjust column width for better fit -->
+          <div class="mb-4">
+            <!-- Adjust margin -->
+            <h2 class="text-center">Edit User Details</h2>
+            <!-- Center title -->
           </div>
+
           <% if (errorMessage) { %>
-          <div class="alert alert-danger">
-            <p><%= errorMessage %></p>
+          <div
+            class="alert alert-danger alert-dismissible fade show"
+            role="alert"
+          >
+            <!-- Make dismissible -->
+            <%= errorMessage %>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="alert"
+              aria-label="Close"
+            ></button>
           </div>
           <% } %>
-          <form action="/edit" method="POST" class="mt-4">
+
+          <form action="/edit" method="POST" class="mt-3">
+            <!-- Ensure action points to the correct admin edit route -->
+
+            <!-- Full Name -->
             <div class="mb-3">
-              <label class="form-label">Email</label>
+              <label for="fulname" class="form-label">Full Name</label>
+              <input
+                class="form-control"
+                type="text"
+                name="fulname"
+                id="fulname"
+                value="<%= user.fulname %>"
+                required
+              />
+            </div>
+
+            <!-- Email -->
+            <div class="mb-3">
+              <label for="email" class="form-label">Email</label>
               <input
                 class="form-control"
                 type="email"
@@ -24,53 +58,121 @@
                 id="email"
                 value="<%= user.email %>"
                 required
+                readonly
               />
+              <small class="form-text text-muted"
+                >Changing email might affect login.</small
+              >
             </div>
+
+            <!-- Phone -->
             <div class="mb-3">
-              <label class="form-label">InvestmentAmount</label>
+              <label for="phone" class="form-label">Phone</label>
+              <input
+                class="form-control"
+                type="number"
+                name="phone"
+                id="phone"
+                value="<%= user.phone %>"
+                required
+              />
+              <small class="form-text text-muted"
+                >Enter number without leading '0' if stored that way.</small
+              >
+              <!-- Clarify format -->
+            </div>
+
+            <!-- Investment Plan/Type -->
+            <div class="mb-3">
+              <label for="investment" class="form-label">Investment Plan</label>
+              <input
+                class="form-control"
+                type="text"
+                name="investment"
+                id="investment"
+                value="<%= user.investment || '' %>"
+              />
+              <small class="form-text text-muted"
+                >e.g., Basic, Premium, etc.</small
+              >
+            </div>
+
+            <!-- Investment Amount -->
+            <div class="mb-3">
+              <label for="investmentAmount" class="form-label"
+                >Investment Amount ($)</label
+              >
               <input
                 class="form-control"
                 type="number"
                 name="investmentAmount"
                 id="investmentAmount"
-                value="<%= user.investmentAmount %>"
-                min="0.01"
+                value="<%= user.investmentAmount || 0 %>"
+                min="0"
                 step="0.01"
                 required
               />
             </div>
+
+            <!-- Investment Date -->
             <div class="mb-3">
-              <label class="form-label">Investment Date</label>
+              <label for="investmentDate" class="form-label"
+                >Investment Date</label
+              >
               <input
                 class="form-control"
                 type="date"
                 name="investmentDate"
                 id="investmentDate"
-                value="<%= user.investmentDate %>"
+                value="<%= user.investmentDate ? new Date(user.investmentDate).toISOString().split('T')[0] : '' %>"
                 required
               />
             </div>
+
+            <!-- User Type -->
             <div class="mb-3">
-              <label class="form-label">Withdrawal request</label>
-              <select id="withdrawal" name="withdrawal" required>
-                <option value="No">No</option>
-                <option value="Yes">Yes</option>
-              </select>
+              <label for="type" class="form-label">User Type</label>
+              <input
+                class="form-control"
+                type="text"
+                name="type"
+                id="type"
+                value="<%= user.type || 'user' %>"
+              />
+              <small class="form-text text-muted">e.g., user, admin</small>
             </div>
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-            <input type="hidden" value="<%= user._id %>" name="userId" />
+
+            <!-- Referrer Code -->
             <div class="mb-3">
-              <button
-                class="btn btn-outline-primary rounded-pill mt-3 btn-sm border-2 d-block d-lg-inline-block ms-auto my-3 my-lg-0"
-                type="submit"
-              >
-                Update
+              <label for="ref" class="form-label">Referrer Code</label>
+              <input
+                class="form-control"
+                type="text"
+                name="ref"
+                id="ref"
+                value="<%= user.ref || '' %>"
+              />
+            </div>
+
+            <!-- Removed Withdrawal Request Section -->
+
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input type="hidden" name="userId" value="<%= user._id %>" />
+            <!-- Ensure name is "userId" -->
+
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-between mt-4">
+              <!-- Use flexbox for button alignment -->
+              <a href="/admin" class="btn btn-secondary rounded-pill">
+                <!-- Standard secondary style for back -->
+                <i class="fas fa-arrow-left me-1"></i> Back
+                <!-- Optional Icon -->
+              </a>
+              <button class="btn btn-primary rounded-pill" type="submit">
+                <!-- Standard primary style for update -->
+                <i class="fas fa-save me-1"></i> Update User
+                <!-- Optional Icon -->
               </button>
-              <a
-                href="/admin"
-                class="btn btn-outline-primary rounded-pill mt-3 btn-sm border-2 d-block d-lg-inline-block ms-auto my-3 my-lg-0"
-                >Back</a
-              >
             </div>
           </form>
         </div>

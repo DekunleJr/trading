@@ -198,3 +198,27 @@ body {
     transform: scaleY(1);
   }
 }
+
+.footer-logo img {
+  max-width: 60px; /* Control logo size here */
+  height: auto; /* Maintain aspect ratio */
+  border-radius: 50%; /* Keep the circle */
+}
+
+/* Style for the floating social buttons (adjust colors if needed) */
+.btn-floating {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 2rem; /* Adjust size */
+  height: 2rem; /* Adjust size */
+  padding: 0;
+  font-size: 0.9rem; /* Adjust icon size */
+}
+
+.footer a.text-white-75:hover {
+  color: #ffffff !important; /* Brighter white on hover */
+}
+.btn-outline-light:hover {
+  background-color: rgba(255, 255, 255, 0.1); /* Subtle background on hover */
+}

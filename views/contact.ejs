@@ -1,8 +1,9 @@
 <%- include('includes/head.ejs') %>
 
-<body>
+<body class="d-flex flex-column min-vh-100 bg-light">
   <%- include('includes/nav.ejs') %>
-  <main>
+
+  <main class="flex-grow-1">
     <div class="preloader" id="preloader">
       <div class="loader">
         <div class="line-scale">
@@ -15,114 +16,151 @@
       </div>
     </div>
 
-    <section class="bg-100">
+    <!-- ============================================ -->
+    <!--                Page Header                   -->
+    <!-- ============================================ -->
+    <section class="bg-primary text-white text-center py-5">
       <div class="container">
-        <div class="row align-items-stretch justify-content-center mb-4">
-          <div class="col-lg-12 mb-4 mb-lg-0">
-            <div class="card h-100">
-              <div class="card-body px-5">
-                <h2 class="mb-3">Contact Our Expert Team</h2>
-                <p class="mb-0 text-1100">
-                  Reach out to us for any inquiries related to your forex
-                  trading investments.<br />Our team is here to assist you in
-                  maximizing your returns.
-                </p>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-4 mb-4 mb-lg-0">
-            <div class="card h-100">
-              <div class="card-body px-5">
-                <h5 class="mb-3">General Support</h5>
-                <a href="mailto:support@tradereturn.online"
-                  >support@tradereturn.online</a
-                >
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-4 mb-4 mb-lg-0">
-            <div class="card h-100">
-              <div class="card-body px-5">
-                <h5>Telegram</h5>
-                <a href="https://t.me/tradersreturns" target="_blank">
-                  <p class="mb-0 text-1100">@tradersreturns</p>
-                </a>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-4 mb-4 mb-lg-0">
-            <div class="card h-100">
-              <div class="card-body px-5">
-                <h5 class="mb-3">Partnership Inquiries</h5>
-                <a href="mailto:partners@tradereturn.online">
-                  partners@tradereturn.online
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-lg-12 mb-4 mb-lg-0">
-          <div class="card h-100">
-            <div class="card-body px-5 text-center align-middle">
-              <h1 class="mb-3">Get in Touch with TradeReturn</h1>
-              <p class="mb-0 text-1100">
-                Have questions about earning a 50% monthly capital return with
-                your initial investment?<br />
-                Our team of experts is ready to provide you with all the
-                information you need.<br />
-                Contact us today to learn more about how TradeReturn can help
-                you achieve your financial goals.
-              </p>
-            </div>
-          </div>
-        </div>
+        <h1 class="display-5 fw-bold">Contact Us</h1>
+        <p class="lead mb-0">
+          We're here to help. Reach out with any questions.
+        </p>
+      </div>
+    </section>
 
-        <div class="card">
-          <div class="card-body h-100 p-5">
-            <h5 class="mb-3">Write to us</h5>
-            <form action="/contact" method="POST">
-              <div class="mb-4">
-                <input
-                  class="form-control bg-white"
-                  type="text"
-                  name="name"
-                  id="name"
-                  placeholder="Your Name"
-                  required="required"
-                />
+    <!-- ============================================ -->
+    <!--        Contact Info & Form Section           -->
+    <!-- ============================================ -->
+    <section class="py-6 py-lg-7">
+      <div class="container">
+        <div class="row justify-content-center g-4 g-lg-5">
+          <!-- Introduction Text -->
+          <div class="col-lg-10 text-center mb-5">
+            <h2 class="fw-bold mb-3">Get in Touch with TradeReturn Experts</h2>
+            <p class="">
+              Have questions about earning significant monthly capital returns
+              with your investment? Our team is ready to provide the information
+              you need to achieve your financial goals with TradeReturn.
+            </p>
+          </div>
+
+          <!-- Contact Method Cards -->
+          <div class="col-lg-10">
+            <div class="row justify-content-center g-4 text-center">
+              <div class="col-md-4 d-flex">
+                <div class="card shadow-sm border-0 w-100 p-4">
+                  <div class="card-body d-flex flex-column align-items-center">
+                    <span
+                      class="fas fa-envelope-open-text fa-3x text-primary mb-3"
+                    ></span>
+                    <h5 class="card-title fw-semibold mb-2">General Support</h5>
+                    <a
+                      href="mailto:support@tradereturn.online"
+                      class="text-decoration-none stretched-link"
+                      >support@tradereturn.online</a
+                    >
+                  </div>
+                </div>
               </div>
-              <div class="mb-4">
-                <input
-                  class="form-control bg-white"
-                  type="email"
-                  name="email"
-                  id="email"
-                  placeholder="Email"
-                  required="required"
-                />
+              <div class="col-md-4 d-flex">
+                <div class="card shadow-sm border-0 w-100 p-4">
+                  <div class="card-body d-flex flex-column align-items-center">
+                    <span
+                      class="fab fa-telegram-plane fa-3x text-primary mb-3"
+                    ></span>
+                    <h5 class="card-title fw-semibold mb-2">Telegram</h5>
+                    <a
+                      href="https://t.me/tradersreturns"
+                      target="_blank"
+                      class="text-decoration-none stretched-link text-muted"
+                      >@tradersreturns</a
+                    >
+                  </div>
+                </div>
               </div>
-              <div class="mb-4">
-                <textarea
-                  class="form-control bg-white"
-                  rows="10"
-                  name="description"
-                  id="description"
-                  placeholder="Enter your descriptions here..."
-                  required="required"
-                ></textarea>
+              <div class="col-md-4 d-flex">
+                <div class="card shadow-sm border-0 w-100 p-4">
+                  <div class="card-body d-flex flex-column align-items-center">
+                    <span
+                      class="fas fa-hands-helping fa-3x text-primary mb-3"
+                    ></span>
+                    <h5 class="card-title fw-semibold mb-2">Partnerships</h5>
+                    <a
+                      href="mailto:partners@tradereturn.online"
+                      class="text-decoration-none stretched-link"
+                      >partners@tradereturn.online</a
+                    >
+                  </div>
+                </div>
               </div>
-              <div>
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            </div>
+          </div>
+
+          <!-- Contact Form -->
+          <div class="col-lg-8 mt-5 mt-lg-6">
+            <div class="card shadow-sm border-0">
+              <div class="card-body p-4 p-lg-5">
+                <h3 class="mb-4 text-center fw-semibold">Write to Us</h3>
+                <form action="/contact" method="POST">
+                  <div class="mb-3">
+                    <label for="name" class="form-label visually-hidden"
+                      >Your Name</label
+                    >
+                    <input
+                      class="form-control form-control-lg"
+                      type="text"
+                      name="name"
+                      id="name"
+                      placeholder="Your Name"
+                      required
+                    />
+                  </div>
+                  <div class="mb-3">
+                    <label for="email" class="form-label visually-hidden"
+                      >Email</label
+                    >
+                    <input
+                      class="form-control form-control-lg"
+                      type="email"
+                      name="email"
+                      id="email"
+                      placeholder="Your Email Address"
+                      required
+                    />
+                  </div>
+                  <div class="mb-4">
+                    <label for="description" class="form-label visually-hidden"
+                      >Message</label
+                    >
+                    <textarea
+                      class="form-control form-control-lg"
+                      rows="6"
+                      name="description"
+                      id="description"
+                      placeholder="Enter your message here..."
+                      required
+                    ></textarea>
+                  </div>
+                  <div>
+                    <input
+                      type="hidden"
+                      name="_csrf"
+                      value="<%= csrfToken %>"
+                    />
+                  </div>
+                  <div class="d-grid">
+                    <button class="btn btn-primary btn-lg" type="Submit">
+                      Send Message <i class="fas fa-paper-plane ms-2"></i>
+                    </button>
+                  </div>
+                </form>
               </div>
-              <button class="btn btn-md-lg btn-primary" type="Submit">
-                <span class="color-white fw-600">Send Now</span>
-              </button>
-            </form>
+            </div>
           </div>
         </div>
       </div>
-      <!-- end of .container-->
     </section>
   </main>
+
   <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
 </body>

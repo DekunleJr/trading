@@ -350,12 +350,16 @@ exports.getTrade = async (req, res, next) => {
 };
 
 exports.getAdmin = async (req, res, next) => {
+  const message = req.flash("error")[0] || null;
+  const success = req.flash("success")[0] || null;
   try {
     const users = await User.find();
     res.render("admin", {
       path: "/",
       pageTitle: "Admin page",
       users: users,
+      errorMessage: message,
+      successMessage: success,
     });
   } catch (err) {
     next(new Error(err));
@@ -476,36 +480,82 @@ exports.postDeleteUser = async (req, res, next) => {
 };
 
 exports.postEditUser = async (req, res, next) => {
-  let { email, investmentAmount, investmentDate, withdrawal, userId } =
-    req.body;
+  const {
+    userId,
+    fulname,
+    email,
+    phone,
+    investment,
+    investmentAmount,
+    investmentDate,
+    type,
+    ref,
+  } = req.body;
   const errors = validationResult(req);
 
+  let user;
   try {
-    const user = await User.findById(userId);
+    user = await User.findById(userId);
     if (!user) {
-      return res.status(404).render("404", { pageTitle: "User Not Found" }); // Handle missing user
+      req.flash("error", "User not found.");
+      return res.redirect("/admin");
     }
+  } catch (err) {
+    console.error("Error finding user for edit:", err);
+    const error = new Error(
+      "Could not find the user specified. Please try again."
+    );
+    error.httpStatusCode = 500;
+    return next(error);
+  }
 
-    if (!errors.isEmpty()) {
-      res.render("edit-user", {
-        pageTitle: "Edit User",
-        path: "edit-user",
-        errorMessage: message,
-        user: user,
-      });
-    }
+  if (!errors.isEmpty()) {
+    console.log("Validation Errors:", errors.array());
+    return res.status(422).render("edit-user", {
+      pageTitle: "Edit User",
+      path: "/edit-user",
+      user: {
+        _id: userId,
+        fulname: fulname,
+        email: email,
+        phone: phone,
+        investment: investment,
+        investmentAmount: investmentAmount,
+        investmentDate: investmentDate,
+        type: type,
+        ref: ref,
+      },
+      errorMessage: errors.array()[0].msg,
+      validationErrors: errors.array(),
+      csrfToken: req.csrfToken(),
+    });
+  }
+  // --- End Validation Handling ---
+
+  // 3. Update user properties
+  try {
+    // Assign potentially updated values
+    user.fulname = fulname;
     user.email = email;
+    user.phone = phone;
+    user.investment = investment;
     user.investmentAmount = investmentAmount;
     user.investmentDate = investmentDate;
-    user.withdrawal = withdrawal;
+    user.type = type;
+    user.ref = ref;
 
+    // 4. Save the updated user
     await user.save();
 
-    // Redirect to login
-    res.redirect("/admin");
+    // 5. Redirect on success
+    req.flash("success", "User details updated successfully.");
+    res.redirect("/admin"); // Redirect back to the admin user list
   } catch (err) {
-    console.error("Error in editing :", err);
-    next(); // Pass error to centralized error handling middleware
+    console.error("Error saving updated user:", err);
+    // Handle potential saving errors (e.g., database connection issue, validation hook failure)
+    const error = new Error("Failed to update user details. Please try again.");
+    error.httpStatusCode = 500;
+    return next(error); // Pass to error handling middleware
   }
 };
 
@@ -659,7 +709,7 @@ exports.postCrypto = async (req, res, next) => {
 };
 
 exports.getEditUser = async (req, res, next) => {
-  const message = req.flash("error")[0] || null;
+  const message = req.flash("error")[0] || req.flash("success")[0] || null;
   try {
     const userId = req.params.userId; // Get user ID from URL
     const user = await User.findById(userId); // Fetch user from DB

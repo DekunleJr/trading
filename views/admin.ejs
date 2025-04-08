@@ -16,56 +16,107 @@
       </div>
     </div>
 
-    <div class="mt-8 flex-grow-1">
-      <h2 class="text-center mb-4">All Users</h2>
+    <!-- Use container-fluid for full width or keep container for padded width -->
+    <!-- Option 1: Full viewport width (edge-to-edge feel) -->
+    <!-- <div class="container-fluid mt-5 flex-grow-1"> -->
 
-      <table class="table table-bordered table-striped">
-        <thead class="admin-table">
-          <tr>
-            <th>#</th>
-            <th>Full Name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Investment</th>
-            <th>Amount</th>
-            <th>Investment Date</th>
-            <th>Withdrawal Request</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% users.forEach((user, index) => { %>
-          <tr>
-            <td><%= index + 1 %></td>
-            <td><%= user.fulname %></td>
-            <td><%= user.email %></td>
-            <td>0<%= user.phone %></td>
-            <td><%= user.investment || 'N/A' %></td>
-            <td>$<%= user.investmentAmount %></td>
-            <td><%= new Date(user.investmentDate).toLocaleDateString() %></td>
-            <td><%= user.withdrawal %></td>
-            <td>
-              <a
-                href="/edit-user/<%= user._id %>"
-                class="btn btn-primary btn-sm rounded-pill"
-                >Edit</a
-              >
-              <form action="/delete-user" method="POST" class="mt-1 align">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                <input type="hidden" value="<%= user._id %>" name="userId" />
-                <button
-                  class="btn btn-danger btn-sm rounded-pill"
-                  type="submit"
+    <!-- Option 2: Full width within standard container padding (More common) -->
+    <div class="container-fluid mt-5 flex-grow-1">
+      <h2 class="text-center mb-4">User Management</h2>
+      <% if (successMessage) { %>
+      <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <%= successMessage %>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+          aria-label="Close"
+        ></button>
+      </div>
+      <% } %> <% if (errorMessage) { %>
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <!-- Make dismissible -->
+        <%= errorMessage %>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+          aria-label="Close"
+        ></button>
+      </div>
+      <% } %> <% if (users.length > 0) { %>
+      <div class="table-responsive">
+        <!-- Keep for scrolling on overflow -->
+        <!-- Add w-100 class to the table -->
+        <table class="table table-bordered table-striped table-hover w-100">
+          <thead class="admin-table">
+            <tr>
+              <th>User ID</th>
+              <th>Full Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Investment Plan</th>
+              <th>Invested Amount</th>
+              <th>Investment Date</th>
+              <th>Referrer Code</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% users.forEach((user) => { %>
+            <tr>
+              <td><%= user._id %></td>
+              <td><%= user.fulname %></td>
+              <td><%= user.email %></td>
+              <td>0<%= user.phone %></td>
+              <td><%= user.investment || 'N/A' %></td>
+              <td>
+                $<%= user.investmentAmount ? user.investmentAmount.toFixed(2) :
+                '0.00' %>
+              </td>
+              <td>
+                <%= user.investmentDate ? new
+                Date(user.investmentDate).toLocaleDateString() : 'N/A' %>
+              </td>
+              <td><%= user.ref || 'N/A' %></td>
+              <td>
+                <a
+                  href="/edit-user/<%= user._id %>"
+                  class="btn btn-primary btn-sm rounded-pill mb-1 d-inline-block"
+                  title="Edit User"
                 >
-                  Delete
-                </button>
-              </form>
-            </td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
+                  <i class="fas fa-edit"></i> Edit
+                </a>
+                <form
+                  action="/delete-user"
+                  method="POST"
+                  style="display: inline-block"
+                  class="ms-1"
+                >
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <input type="hidden" value="<%= user._id %>" name="userId" />
+                  <button
+                    class="btn btn-danger btn-sm rounded-pill"
+                    type="submit"
+                    title="Delete User"
+                    onclick="return confirm('Are you sure you want to delete user <%= user.fulname %> (ID: <%= user._id %>)? This action cannot be undone.');"
+                  >
+                    <i class="fas fa-trash-alt"></i> Delete
+                  </button>
+                </form>
+              </td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <% } else { %>
+      <div class="alert alert-info text-center" role="alert">
+        No users found in the system.
+      </div>
+      <% } %>
     </div>
   </main>
+
   <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
 </body>

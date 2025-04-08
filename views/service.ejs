@@ -1,9 +1,9 @@
 <%- include('includes/head.ejs') %>
 
-<body>
+<body class="d-flex flex-column min-vh-100">
   <%- include('includes/nav.ejs') %>
 
-  <main class="main" id="top">
+  <main class="main flex-grow-1" id="top">
     <div class="preloader" id="preloader">
       <div class="loader">
         <div class="line-scale">
@@ -16,177 +16,231 @@
       </div>
     </div>
 
-    <section class="bg-primary py-6 text-center text-md-start">
+    <!-- ============================================ -->
+    <!--                  Hero Section                -->
+    <!-- ============================================ -->
+    <section class="bg-primary text-white py-7 py-lg-8">
       <div class="container">
-        <div class="row text-white p-3">
-          <div class="col-lg-5 pe-lg-3">
-            <h1 class="fs-2 fs-lg-3 text-white">
-              Comprehensive Forex Trading Bot Services
+        <div class="row align-items-center">
+          <div class="col-lg-6 text-center text-lg-start mb-5 mb-lg-0">
+            <h1 class="fs-3 fs-lg-4 text-white fw-bold mb-4">
+              Maximize Forex Returns with Automated Trading
             </h1>
-            <p class="mt-4">
-              Delve into our specialized forex trading bot services designed to
-              maximize your investment returns with a promise of 50% capital
-              return with your initial investment.
+            <p class="lead text-white-75 mb-4">
+              Leverage our advanced Forex trading bots for consistent
+              performance. We target a significant capital return alongside your
+              initial investment, managed through expert strategies.
             </p>
+            <a
+              href="/signup"
+              class="btn btn-warning btn-lg rounded-pill me-2 mb-2 mb-sm-0"
+              >Get Started</a
+            >
+            <a
+              href="#features"
+              class="btn btn-outline-light btn-lg rounded-pill"
+              >Learn More</a
+            >
           </div>
 
-          <div class="col-lg-7 px-lg-5 row">
-            <div class="col-12 col-sm-6">
-              <div class="card bg-primary overflow-hidden shadow-lg p-3">
-                <div class="px-4 p-3 px-sm-0" data-zanim-xs='{"delay":0}'>
-                  <span
-                    class="fas fa-robot fs-1 me-2"
-                    data-fa-transform="shrink-1"
-                  ></span>
-                  <h5 class="fs-0 fs-lg-1 text-white mt-2">Bot Advisory</h5>
-                  <p class="mt-3">
-                    Benefit from our seasoned trading bots who provide insights
-                    and strategies tailored to your investment goals.
-                  </p>
+          <div class="col-lg-6">
+            <div class="row g-3">
+              <div class="col-12 col-sm-6">
+                <div
+                  class="card bg-white text-dark h-100 shadow-sm border-0 rounded-3 p-4 text-center text-sm-start"
+                >
+                  <div
+                    class="d-flex flex-column flex-sm-row align-items-center"
+                  >
+                    <span
+                      class="fas fa-robot fs-1 text-primary me-sm-3 mb-3 mb-sm-0"
+                    ></span>
+                    <div>
+                      <h5 class="fs-0 fw-semibold mb-1">Expert Bot Advisory</h5>
+                      <p class="mb-0 small text-muted">
+                        Tailored strategies and insights from our automated
+                        systems.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="card bg-primary overflow-hidden shadow-lg mt-3 p-3">
-                <div class="px-4 p-3 px-sm-0" data-zanim-xs='{"delay":0}'>
-                  <span
-                    class="far fa-chart-bar fs-1 me-2"
-                    data-fa-transform="shrink-1"
-                  ></span>
-                  <h5 class="fs-0 fs-lg-1 text-white mt-2">
-                    Advanced Analytics
-                  </h5>
-                  <p class="mt-3">
-                    Utilize cutting-edge tools and analytics to stay ahead in
-                    the forex market and make informed trading decisions.
-                  </p>
+              <div class="col-12 col-sm-6">
+                <div
+                  class="card bg-white text-dark h-100 shadow-sm border-0 rounded-3 p-4 text-center text-sm-start"
+                >
+                  <div
+                    class="d-flex flex-column flex-sm-row align-items-center"
+                  >
+                    <span
+                      class="far fa-chart-bar fs-1 text-primary me-sm-3 mb-3 mb-sm-0"
+                    ></span>
+                    <div>
+                      <h5 class="fs-0 fw-semibold mb-1">Advanced Analytics</h5>
+                      <p class="mb-0 small text-muted">
+                        Utilize cutting-edge tools for informed market
+                        decisions.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="col-12 col-sm-6">
-              <div class="card bg-primary overflow-hidden shadow-lg p-3">
-                <div class="px-4 p-3 px-sm-0" data-zanim-xs='{"delay":0}'>
-                  <span
-                    class="fas fas fa-lock fs-1 me-2"
-                    data-fa-transform="grow-1"
-                  ></span>
-                  <h5 class="fs-0 fs-lg-1 text-white mt-2">
-                    Secure Transactions
-                  </h5>
-                  <p class="mt-3">
-                    Experience peace of mind with our robust security protocols
-                    ensuring your transactions are safe and secure.
-                  </p>
+              <div class="col-12 col-sm-6">
+                <div
+                  class="card bg-white text-dark h-100 shadow-sm border-0 rounded-3 p-4 text-center text-sm-start"
+                >
+                  <div
+                    class="d-flex flex-column flex-sm-row align-items-center"
+                  >
+                    <span
+                      class="fas fa-lock fs-1 text-primary me-sm-3 mb-3 mb-sm-0"
+                    ></span>
+                    <div>
+                      <h5 class="fs-0 fw-semibold mb-1">Secure Transactions</h5>
+                      <p class="mb-0 small text-muted">
+                        Robust security protocols ensure your investments are
+                        safe.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="card bg-primary overflow-hidden shadow-lg mt-3 p-3">
-                <div class="px-4 p-3 px-sm-0" data-zanim-xs='{"delay":0}'>
-                  <span
-                    class="fas fa-stopwatch fs-1 me-2"
-                    data-fa-transform="grow-1"
-                  ></span>
-                  <h5 class="fs-0 fs-lg-1 text-white mt-2">24/7 Support</h5>
-                  <p class="mt-3">
-                    Get round-the-clock support from our dedicated team to
-                    assist you whenever you need it.
-                  </p>
+              <div class="col-12 col-sm-6">
+                <div
+                  class="card bg-white text-dark h-100 shadow-sm border-0 rounded-3 p-4 text-center text-sm-start"
+                >
+                  <div
+                    class="d-flex flex-column flex-sm-row align-items-center"
+                  >
+                    <span
+                      class="fas fa-headset fs-1 text-primary me-sm-3 mb-3 mb-sm-0"
+                    ></span>
+                    <div>
+                      <h5 class="fs-0 fw-semibold mb-1">24/7 Support</h5>
+                      <p class="mb-0 small text-muted">
+                        Dedicated assistance available whenever you need it.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <!-- end of .container-->
     </section>
 
-    <section class="bg-white text-center">
+    <!-- ============================================ -->
+    <!--                 Features Section             -->
+    <!-- ============================================ -->
+    <section id="features" class="bg-light py-7 py-lg-8">
       <div class="container">
-        <div class="row justify-content-center text-center">
-          <div class="col-10 col-md-6">
-            <h5 class="px-lg-4">Discover the Power of TradeReturn</h5>
-            <h3 class="fs-2 fs-lg-3">
+        <div class="row justify-content-center text-center mb-5">
+          <div class="col-lg-8">
+            <h5 class="text-primary fw-bold">Why Choose TradeReturn?</h5>
+            <h2 class="fs-3 fs-lg-4 fw-bold mb-3">
               Transform Your Forex Trading Experience
-            </h3>
-            <p class="px-lg-4 mt-3">
-              With TradeReturn, enjoy the assurance of a 50% capital return
-              monthly. Simply subscribe and fund your account, and let our
-              advanced trading bot handle the rest. Our automated daily trades
-              are designed with optimal risk management to maximize your
-              profits, ensuring you benefit from forex trading without needing
-              any prior knowledge. Get started by contacting us and securing
-              your subscription today.
+            </h2>
+            <p class="lead text-muted px-lg-5">
+              With TradeReturn, target substantial monthly returns. Fund your
+              account, and let our bot handle daily trades with optimized risk
+              management. No prior trading knowledge needed.
             </p>
             <hr
-              class="short"
-              data-zanim-xs='{"from":{"opacity":0,"width":0},"to":{"opacity":1,"width":"4.20873rem"},"duration":0.8}'
+              class="short text-primary mx-auto"
+              style="height: 3px; width: 5rem; opacity: 1"
+              data-zanim-xs='{"from":{"opacity":0,"width":0},"to":{"opacity":1,"width":"5rem"},"duration":0.8}'
               data-zanim-trigger="scroll"
             />
           </div>
         </div>
-        <div class="row mt-4 mt-md-5">
+        <div class="row g-4">
           <div
-            class="col-sm-6 col-lg-4 mt-4"
+            class="col-md-6 col-lg-4 d-flex"
             data-zanim-timeline="{}"
             data-zanim-trigger="scroll"
           >
-            <div class="ring-icon mx-auto" data-zanim-xs='{"delay":0}'>
-              <span class="far fa-chart-bar"></span>
+            <div
+              class="card card-body text-center h-100 shadow-sm border-0 p-4 p-lg-5"
+            >
+              <span
+                class="fas fa-shield-alt fs-1 text-success mx-auto mb-4"
+              ></span>
+              <h5 class="fw-semibold mb-3" data-zanim-xs='{"delay":0.1}'>
+                Capital Return Focus
+              </h5>
+              <p class="mb-0 text-muted" data-zanim-xs='{"delay":0.2}'>
+                Our model prioritizes returning your capital alongside profits,
+                primarily charging handling fees.
+              </p>
             </div>
-            <h5 class="mt-4" data-zanim-xs='{"delay":0.1}'>
-              50% Capital Return Guarantee
-            </h5>
-            <p class="mb-0 mt-3 px-3" data-zanim-xs='{"delay":0.2}'>
-              Experience unmatched security with our promise of full capital
-              returns. We only charge you for handling fees.
-            </p>
           </div>
           <div
-            class="col-sm-6 col-lg-4 mt-4"
+            class="col-md-6 col-lg-4 d-flex"
             data-zanim-timeline="{}"
             data-zanim-trigger="scroll"
           >
-            <div class="ring-icon mx-auto" data-zanim-xs='{"delay":0}'>
-              <span class="fas fa-robot"></span>
+            <div
+              class="card card-body text-center h-100 shadow-sm border-0 p-4 p-lg-5"
+            >
+              <span class="fas fa-brain fs-1 text-info mx-auto mb-4"></span>
+              Different icon/color %>
+              <h5 class="fw-semibold mb-3" data-zanim-xs='{"delay":0.1}'>
+                AI Trading Bot
+              </h5>
+              <p class="mb-0 text-muted" data-zanim-xs='{"delay":0.2}'>
+                Benefit from automated strategies developed for market
+                efficiency.
+              </p>
             </div>
-            <h5 class="mt-4" data-zanim-xs='{"delay":0.1}'>AI trading bot</h5>
-            <p class="mb-0 mt-3 px-3" data-zanim-xs='{"delay":0.2}'>
-              Benefit from insights and strategies crafted by seasoned forex
-              bot.
-            </p>
           </div>
           <div
-            class="col-sm-6 col-lg-4 mt-4"
+            class="col-md-6 col-lg-4 d-flex"
             data-zanim-timeline="{}"
             data-zanim-trigger="scroll"
           >
-            <div class="ring-icon mx-auto" data-zanim-xs='{"delay":0}'>
-              <span class="far fa-clock"></span>
+            <div
+              class="card card-body text-center h-100 shadow-sm border-0 p-4 p-lg-5"
+            >
+              <span class="far fa-clock fs-1 text-warning mx-auto mb-4"></span>
+              <h5 class="fw-semibold mb-3" data-zanim-xs='{"delay":0.1}'>
+                24/7 Market Access
+              </h5>
+              <p class="mb-0 text-muted" data-zanim-xs='{"delay":0.2}'>
+                Our bots operate continuously, accessing global market
+                opportunities.
+              </p>
             </div>
-            <h5 class="mt-4" data-zanim-xs='{"delay":0.1}'>
-              24/7 Trading Opportunities
-            </h5>
-            <p class="mb-0 mt-3 px-3" data-zanim-xs='{"delay":0.2}'>
-              Access global markets anytime with our seamless trading platform.
-            </p>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="bg-primary py-6 text-center text-md-start">
+    <!-- ============================================ -->
+    <!--                  CTA Section                 -->
+    <!-- ============================================ -->
+    <section class="bg-primary py-6 text-center">
       <div class="container">
-        <div class="row align-items-center">
-          <div class="col-md">
-            <h4 class="text-white mb-0">
-              If you have any query related investment...
-              <br class="d-md-none" />we are available 24/7
-            </h4>
-          </div>
-          <div class="col-md-auto mt-md-0 mt-4">
-            <a class="btn btn-light rounded-pill" href="/contact">Contact Us</a>
+        <div class="row justify-content-center">
+          <div class="col-lg-8">
+            <h3 class="fs-2 fs-lg-3 fw-bold text-white mb-4">
+              Have Questions About Your Investment?
+            </h3>
+            <p class="lead text-white-75 mb-4">
+              Our dedicated support team is available around the clock to assist
+              you.
+            </p>
+            <a class="btn btn-warning btn-lg rounded-pill" href="/contact">
+              <i class="fas fa-envelope me-2"></i> Contact Us Now
+            </a>
           </div>
         </div>
       </div>
     </section>
 
+    <!-- ============================================ -->
+    <!--                  Stats Section               -->
+    <!-- ============================================ -->
     <section>
       <div
         class="bg-holder overlay overlay-elixir"
@@ -278,5 +332,6 @@
       </div>
     </section>
   </main>
+
   <%- include('includes/footer.ejs') %> <%- include('includes/end.ejs') %>
 </body>
