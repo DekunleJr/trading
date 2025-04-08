@@ -28,9 +28,9 @@ router.get("/payment-success", auth, controller.paymentSuccess);
 
 router.post("/edit", isAdmin, controller.postEditUser);
 
-router.get("/crypto", auth, controller.getCrypto);
+// router.get("/crypto", auth, controller.getCrypto);
 
-router.post("/upload", auth, controller.postCrypto);
+// router.post("/upload", auth, controller.postCrypto);
 
 router.get("/edit-user/:userId", isAdmin, controller.getEditUser);
 

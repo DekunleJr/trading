@@ -59,26 +59,38 @@
               <th>Invested Amount</th>
               <th>Investment Date</th>
               <th>Referrer Code</th>
+              <th>Wallet Address</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             <% users.forEach((user) => { %>
             <tr>
-              <td><%= user._id %></td>
+              <td><small><%= user._id %></small></td>
               <td><%= user.fulname %></td>
-              <td><%= user.email %></td>
-              <td>0<%= user.phone %></td>
+              <td><small><%= user.email %></small></td>
+              <td><small>0<%= user.phone %></small></td>
               <td><%= user.investment || 'N/A' %></td>
               <td>
-                $<%= user.investmentAmount ? user.investmentAmount.toFixed(2) :
-                '0.00' %>
+                <%= user.depositCurrency %> <%= user.investmentAmount ?
+                user.investmentAmount.toFixed(2) : '0.00' %>
               </td>
               <td>
                 <%= user.investmentDate ? new
                 Date(user.investmentDate).toLocaleDateString() : 'N/A' %>
               </td>
               <td><%= user.ref || 'N/A' %></td>
+              <td>
+                <% if (user.cryptoWallet &&
+                Object.keys(user.cryptoWallet).length > 0) { %>
+                <small>
+                  <% Object.keys(user.cryptoWallet).forEach(key => { %> <% const
+                  address = user.cryptoWallet[key]; %> <% if (address) { %>
+                  <strong><%= key %>:</strong> <%= address %><br />
+                  <% } %> <% }); %>
+                </small>
+                <% } else { %> N/A <%# Display N/A if no wallets %> <% } %>
+              </td>
               <td>
                 <a
                   href="/edit-user/<%= user._id %>"

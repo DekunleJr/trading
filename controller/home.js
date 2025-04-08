@@ -104,13 +104,6 @@ exports.getTrade = async (req, res, next) => {
         );
         const ethBalanceWei = await provider.getBalance(user.cryptoWallet.ETH);
         liveBalances.ETH = parseFloat(ethers.utils.formatEther(ethBalanceWei));
-        console.log(`Successfully fetched ETH balance for ${userId}`);
-      } else if (!user.cryptoWallet?.ETH) {
-        console.log(
-          `Skipping ETH fetch: No ETH wallet address for user ${userId}`
-        );
-      } else {
-        console.warn(`Skipping ETH fetch: INFURA_API key not configured.`);
       }
     } catch (err) {
       console.error(
@@ -129,11 +122,6 @@ exports.getTrade = async (req, res, next) => {
           user.cryptoWallet.BNB
         );
         liveBalances.BNB = parseFloat(ethers.utils.formatEther(bnbBalanceWei));
-        console.log(`Successfully fetched BNB balance for ${userId}`);
-      } else {
-        console.log(
-          `Skipping BNB fetch: No BNB wallet address for user ${userId}`
-        );
       }
     } catch (err) {
       console.error(
@@ -162,15 +150,6 @@ exports.getTrade = async (req, res, next) => {
         // Assuming USDT has 6 decimals
         liveBalances.USDT = parseFloat(
           ethers.utils.formatUnits(usdtBalanceUnits, 6)
-        );
-        console.log(`Successfully fetched USDT balance for ${userId}`);
-      } else if (!user.cryptoWallet?.USDT) {
-        console.log(
-          `Skipping USDT fetch: No USDT wallet address for user ${userId}`
-        );
-      } else {
-        console.warn(
-          `Skipping USDT fetch: Missing USDT_CONTRACT_ADDRESS or INFURA_API env variables.`
         );
       }
     } catch (err) {
@@ -202,15 +181,6 @@ exports.getTrade = async (req, res, next) => {
         liveBalances.USDC = parseFloat(
           ethers.utils.formatUnits(usdcBalanceUnits, 6)
         );
-        console.log(`Successfully fetched USDC balance for ${userId}`);
-      } else if (!user.cryptoWallet?.USDC) {
-        console.log(
-          `Skipping USDC fetch: No USDC wallet address for user ${userId}`
-        );
-      } else {
-        console.warn(
-          `Skipping USDC fetch: Missing USDC_CONTRACT_ADDRESS env variable or INFURA_API key.`
-        );
       }
     } catch (err) {
       console.error(
@@ -228,12 +198,7 @@ exports.getTrade = async (req, res, next) => {
         const solBalanceLamports = await solanaConnection.getBalance(
           solPublicKey
         );
-        liveBalances.SOL = solBalanceLamports / 1e9; // Convert lamports to SOL
-        console.log(`Successfully fetched SOL balance for ${userId}`);
-      } else {
-        console.log(
-          `Skipping SOL fetch: No SOL wallet address for user ${userId}`
-        );
+        liveBalances.SOL = solBalanceLamports / 1e9;
       }
     } catch (err) {
       console.error(
@@ -250,7 +215,6 @@ exports.getTrade = async (req, res, next) => {
         // Ensure data exists and is a number before division
         if (typeof btcResponse.data === "number") {
           liveBalances.BTC = btcResponse.data / 1e8;
-          console.log(`Successfully fetched BTC balance for ${userId}`);
         } else {
           console.error(
             `Failed to fetch BTC balance for ${userId}: Invalid response data type - ${typeof btcResponse.data}`
@@ -281,7 +245,6 @@ exports.getTrade = async (req, res, next) => {
         liveBalances.POLYGON = parseFloat(
           ethers.utils.formatEther(maticBalanceWei)
         );
-        console.log(`Successfully fetched MATIC balance for ${userId}`);
       } else {
         console.log(
           `Skipping MATIC fetch: No POLYGON wallet address for user ${userId}`
@@ -308,7 +271,6 @@ exports.getTrade = async (req, res, next) => {
       user.balances = finalBalances;
       try {
         await user.save();
-        console.log(`Updated balances saved to DB for user ${userId}`);
       } catch (saveError) {
         console.error(
           `Failed to save updated balances for user ${userId}: ${saveError.message}`
@@ -341,6 +303,7 @@ exports.getTrade = async (req, res, next) => {
         payoutDate: payoutDateStr,
         cryptoWallet: user.cryptoWallet || {},
         balances: finalBalances,
+        depositCurrency: user.depositCurrency || "USDT_ERC20",
       },
     });
   } catch (err) {
@@ -559,50 +522,113 @@ exports.postEditUser = async (req, res, next) => {
   }
 };
 
+const SUPPORTED_CURRENCIES = {
+  BTC: "btc",
+  ETH: "eth",
+  SOL: "sol",
+  USDT_ERC20: "usdterc20", // USDT on Ethereum Network
+  USDT_TRC20: "usdttrc20", // USDT on Tron Network
+  USDC_ERC20: "usdсerc20", // USDC on Ethereum Network (Note: often uses Cyrillic 'с', double-check!)
+  MATIC: "matic", // Polygon Matic
+  BNB: "bnbbsc", // BNB on Binance Smart Chain (BSC)
+  USDC_ERC20: "usdс", // USDC on Ethereum Network (Note: often uses Cyrillic 'с', double-check!)
+  // Add more currencies here following the pattern 'USER_FRIENDLY_NAME': 'nowpayments_code'
+};
+
+// Create a list of allowed keys for validation
+const ALLOWED_CURRENCY_KEYS = Object.keys(SUPPORTED_CURRENCIES);
+
 exports.postDeposit = async (req, res, next) => {
   try {
-    const { amount } = req.body;
-    const user = await User.findById(req.session.user._id);
+    const { amount, currency } = req.body;
+    const userId = req.session.user._id;
 
-    if (!user) {
-      req.flash("error", "User not found");
+    // 2. Basic Validation
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      req.flash("error", "Invalid deposit amount.");
       return res.status(400).redirect("/deposit");
     }
 
-    const order_id = user._id;
+    if (!currency || !ALLOWED_CURRENCY_KEYS.includes(currency)) {
+      req.flash(
+        "error",
+        `Invalid or unsupported currency selected. Allowed: ${ALLOWED_CURRENCY_KEYS.join(
+          ", "
+        )}`
+      );
+      return res.status(400).redirect("/deposit");
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      req.flash("error", "User not found");
+      return res.status(404).redirect("/deposit");
+    }
+
+    // 3. Get the correct NowPayments currency code
+    const payCurrencyCode = SUPPORTED_CURRENCIES[currency];
+
+    // 4. Prepare URLs and Order ID
+    const order_id = `${user._id}-${Date.now()}`; // Make order_id more unique
     const success_url = `${req.protocol}://${req.get(
       "host"
-    )}/payment-success?amount=${amount}`;
-    const fail_url = `${req.protocol}://${req.get("host")}/trade`;
+    )}/payment-success?amount=${amount}&currency=${currency}&order_id=${order_id}`;
+    const cancel_url = `${req.protocol}://${req.get("host")}/deposit`;
 
-    const response = await axios.post(
-      "https://api.nowpayments.io/v1/invoice",
-      {
-        price_amount: amount,
-        price_currency: "usdterc20",
-        pay_currency: "usdterc20",
-        order_id,
-        success_url,
-        cancel_url: fail_url,
-      },
-      {
-        headers: {
-          "x-api-key": NOWPAYMENTS_API_KEY,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    if (response.data && response.data.invoice_url) {
-      return res.redirect(response.data.invoice_url);
+    // 5. Construct the NowPayments Payload dynamically
+    const payload = {
+      price_amount: parseFloat(amount),
+      price_currency: payCurrencyCode,
+      pay_currency: payCurrencyCode,
+      order_id: order_id,
+      success_url: success_url,
+      cancel_url: cancel_url,
+    };
+
+    const MOCK_WITHDRAWAL = process.env.MOCK_WITHDRAWAL;
+
+    if (MOCK_WITHDRAWAL) {
+      return res.redirect(success_url);
     } else {
-      req.flash("error", "Deposit request failed");
-      return res.status(500).redirect("/deposit");
+      // 6. Make the API Call
+      const response = await axios.post(
+        "https://api.nowpayments.io/v1/invoice",
+        payload,
+        {
+          headers: {
+            "x-api-key": NOWPAYMENTS_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // 7. Handle the Response
+      if (response.data && response.data.invoice_url) {
+        return res.redirect(response.data.invoice_url);
+      } else {
+        // Handle cases where invoice creation failed but didn't throw an error
+        const errorMessage =
+          response.data?.message || "Invoice creation failed with NowPayments.";
+        req.flash("error", `Deposit request failed: ${errorMessage}`);
+        return res.status(500).redirect("/deposit");
+      }
     }
   } catch (err) {
-    // console.log(err.response.data);
-    console.error("Withdrawal Error:", err.response.data);
-    req.flash("error", "An error occurred during Deposit");
-    return res.redirect("/trade");
+    // 8. Handle Errors during the process
+    let errorMsg = "An error occurred during the deposit process.";
+    if (err.response && err.response.data) {
+      // Log the detailed error from NowPayments
+      console.error("NowPayments API Error:", err.response.data);
+      errorMsg = `NowPayments Error: ${
+        err.response.data.message || "Unknown API error"
+      }`;
+    } else {
+      // Log other types of errors (network, code issues)
+      console.error("Deposit Process Error:", err);
+    }
+    req.flash("error", errorMsg);
+    // Redirect to deposit page on error so user can retry
+    return res.redirect("/deposit");
   }
 };
 
@@ -610,6 +636,7 @@ exports.paymentSuccess = async (req, res, next) => {
   try {
     const userId = req.session.user._id;
     const amount = parseFloat(req.query.amount);
+    const currency = req.query.currency;
 
     // Find the user and update investmentAmount
     const user = await User.findById(userId);
@@ -619,89 +646,14 @@ exports.paymentSuccess = async (req, res, next) => {
 
     user.investmentAmount += amount;
     user.investmentDate = new Date();
+    user.depositCurrency = currency;
     await user.save(); // Save to database
 
     res.render("payment-success", {
       pageTitle: "Payment Success",
       user,
       amount,
-    });
-  } catch (err) {
-    next(new Error(err));
-  }
-};
-
-exports.getCrypto = async (req, res, next) => {
-  try {
-    res.render("crypto", {
-      path: "/crypto",
-      pageTitle: "payment page",
-    });
-  } catch (err) {
-    next(new Error(err));
-  }
-};
-
-exports.postCrypto = async (req, res, next) => {
-  try {
-    const user = req.session.user;
-    const name = user.fulname;
-    const email = user.email;
-
-    if (!req.file) {
-      return res.status(400).send("No file uploaded!");
-    }
-
-    const filePath = path.join(
-      __dirname,
-      "..",
-      "public",
-      "img",
-      req.file.filename
-    );
-
-    setTimeout(() => {
-      fs.unlink(filePath, (err) => {
-        if (err) {
-          console.error("Error deleting file:", err);
-        } else {
-          console.log("File deleted:", filePath);
-        }
-      });
-    }, 60000);
-
-    // Configure Zoho Mail SMTP
-    const transporter = nodemailer.createTransport({
-      host: "smtp.zoho.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER_2,
-        pass: process.env.EMAIL_PASS_2,
-      },
-    });
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER_2, // Sender
-      to: process.env.EMAIL_USER, // Admin email
-      subject: `New Payment Screenshot from ${name}`,
-      text: `Name: ${name}\nEmail: ${email}\n\nMessage:\nAttached to this mail is a screenshot of payment from ${name}`,
-      attachments: [
-        {
-          filename: req.file.originalname,
-          path: filePath,
-        },
-      ],
-    };
-
-    // Send email
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error("Email sending failed:", error);
-        return res.status(500).send("Failed to send email.");
-      }
-      console.log("Email sent:", info.response);
-      res.redirect("/trade");
+      currency,
     });
   } catch (err) {
     next(new Error(err));

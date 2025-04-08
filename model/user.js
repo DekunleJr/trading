@@ -55,9 +55,9 @@ const user = new Schema({
     btc: String,
     sol: String,
   },
-  withdrawal: {
+  depositCurrency: {
     type: String,
-    default: "No",
+    default: "USDT_ERC20",
   },
   type: String,
   ref: String,

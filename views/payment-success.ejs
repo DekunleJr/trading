@@ -20,8 +20,10 @@
         <div class="row">
           <div class="col-md-12">
             <h2>Payment Successful! ✅</h2>
-            <p>Amount Deposited: $<%= amount %></p>
-            <p>Your new balance: $<%= user.investmentAmount %></p>
+            <p>Amount Deposited: <%= currency %> <%= amount %></p>
+            <p>
+              Your new balance: <%= currency %> <%= user.investmentAmount %>
+            </p>
             <a href="/trade">Go to Dashboard</a>
           </div>
         </div>
