@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const controller = require("../controller/home");
+const controller = require("../controller/code");
 const auth = require("../controller/isAuth");
 const isAdmin = require("../controller/isAdmin");
 const swapCrypto = require("../controller/swap");
