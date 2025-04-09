@@ -68,6 +68,23 @@ app.use(morgan("combined", { stream: accessLogStream }));
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(
+  bodyParser.json({
+    verify: (req, res, buf, encoding) => {
+      try {
+        // Only store rawBody for specific routes if needed, e.g., IPN routes
+        if (req.path.includes("/api/nowpayments-payout-ipn")) {
+          // Adjust path condition
+          req.rawBody = buf.toString(encoding || "utf8");
+        }
+      } catch (e) {
+        console.error("Raw body verification failed:", e);
+        res.status(400).send("Invalid request body"); // Prevent further processing
+        throw e; // Re-throw to stop request handling
+      }
+    },
+  })
+);
+app.use(
   multer({ storage: fileStorage, fileFilter: fileFilter }).single("image")
 );
 app.use(express.static(path.join(__dirname, "public")));

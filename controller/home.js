@@ -7,6 +7,7 @@ const path = require("path");
 const { ethers } = require("ethers");
 const { Connection, PublicKey } = require("@solana/web3.js");
 const axios = require("axios");
+const Withdrawal = require("../model/withdrawal");
 
 const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
 const NOWPAYMENTS_EMAIL = process.env.NOWPAYMENTS_EMAIL;
@@ -34,6 +35,29 @@ async function getAuthToken() {
     return null;
   }
 }
+
+exports.getWithdrawals = async (req, res, next) => {
+  try {
+    const userId = req.session.user._id;
+    const withdrawals = await Withdrawal.find({ userId: userId }).sort({
+      createdAt: -1,
+    }); // Show newest first
+
+    res.render("withdrawals", {
+      pageTitle: "Withdrawal History",
+      path: "/withdrawals",
+      withdrawals: withdrawals,
+      // Pass any other necessary template variables
+      csrfToken: req.csrfToken(),
+      isAuthenticated: req.session.isLoggedIn,
+    });
+  } catch (err) {
+    console.error("Error fetching withdrawals:", err);
+    const error = new Error("Could not retrieve withdrawal history.");
+    error.httpStatusCode = 500;
+    return next(error);
+  }
+};
 
 exports.getindex = async (req, res, next) => {
   try {
@@ -359,72 +383,72 @@ exports.postContact = async (req, res, next) => {
   }
 };
 
-exports.postWithdraw = async (req, res, next) => {
-  try {
-    const userId = req.session.user._id;
-    const { amount } = req.body;
+// exports.postWithdraw = async (req, res, next) => {
+//   try {
+//     const userId = req.session.user._id;
+//     const { amount } = req.body;
 
-    const user = await User.findById(userId);
-    if (!user) {
-      req.flash("error", "User not found");
-      return res.redirect("/trade");
-    }
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       req.flash("error", "User not found");
+//       return res.redirect("/trade");
+//     }
 
-    const walletAddress = user.cryptoWallet.USDT;
-    if (!walletAddress) {
-      req.flash("error", "No USDT (ERC-20) wallet address found");
-      return res.redirect("/trade");
-    }
+//     const walletAddress = user.cryptoWallet.USDT;
+//     if (!walletAddress) {
+//       req.flash("error", "No USDT (ERC-20) wallet address found");
+//       return res.redirect("/trade");
+//     }
 
-    if (parseFloat(amount) > user.investmentAmount) {
-      req.flash("error", "Insufficient balance");
-      return res.redirect("/trade");
-    }
+//     if (parseFloat(amount) > user.investmentAmount) {
+//       req.flash("error", "Insufficient balance");
+//       return res.redirect("/trade");
+//     }
 
-    const authToken = await getAuthToken();
-    // console.log("Auth Token:", authToken);
-    if (!authToken) {
-      req.flash("error", "Failed to authenticate with NowPayments");
-      return res.redirect("/trade");
-    }
-    // NowPayments API request
-    const response = await axios.post(
-      "https://api.nowpayments.io/v1/payout",
-      {
-        withdrawals: [
-          {
-            currency: "usdterc20",
-            amount: parseFloat(amount),
-            address: walletAddress,
-          },
-        ],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "x-api-key": NOWPAYMENTS_API_KEY, // Make sure to store API key in .env
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    console.log("respose data:", response.data);
+//     const authToken = await getAuthToken();
+//     // console.log("Auth Token:", authToken);
+//     if (!authToken) {
+//       req.flash("error", "Failed to authenticate with NowPayments");
+//       return res.redirect("/trade");
+//     }
+//     // NowPayments API request
+//     const response = await axios.post(
+//       "https://api.nowpayments.io/v1/payout",
+//       {
+//         withdrawals: [
+//           {
+//             currency: "usdterc20",
+//             amount: parseFloat(amount),
+//             address: walletAddress,
+//           },
+//         ],
+//       },
+//       {
+//         headers: {
+//           Authorization: `Bearer ${authToken}`,
+//           "x-api-key": NOWPAYMENTS_API_KEY, // Make sure to store API key in .env
+//           "Content-Type": "application/json",
+//         },
+//       }
+//     );
+//     console.log("respose data:", response.data);
 
-    if (response.data && response.data.status === "success") {
-      user.investmentAmount -= parseFloat(amount);
-      await user.save();
+//     if (response.data && response.data.status === "success") {
+//       user.investmentAmount -= parseFloat(amount);
+//       await user.save();
 
-      req.flash("success", "withdrawal initiated successfully");
-    } else {
-      req.flash("error", "Failed to initiate withdrawal");
-    }
+//       req.flash("success", "withdrawal initiated successfully");
+//     } else {
+//       req.flash("error", "Failed to initiate withdrawal");
+//     }
 
-    return res.redirect("/trade");
-  } catch (err) {
-    console.error("Withdrawal Error:", err);
-    req.flash("error", "An error occurred during withdrawal");
-    return res.redirect("/trade");
-  }
-};
+//     return res.redirect("/trade");
+//   } catch (err) {
+//     console.error("Withdrawal Error:", err);
+//     req.flash("error", "An error occurred during withdrawal");
+//     return res.redirect("/trade");
+//   }
+// };
 
 exports.postDeleteUser = async (req, res, next) => {
   const userId = req.body.userId;
@@ -537,6 +561,7 @@ const SUPPORTED_CURRENCIES = {
 
 // Create a list of allowed keys for validation
 const ALLOWED_CURRENCY_KEYS = Object.keys(SUPPORTED_CURRENCIES);
+const currencyMapping = SUPPORTED_CURRENCIES;
 
 exports.postDeposit = async (req, res, next) => {
   try {
@@ -629,6 +654,181 @@ exports.postDeposit = async (req, res, next) => {
     req.flash("error", errorMsg);
     // Redirect to deposit page on error so user can retry
     return res.redirect("/deposit");
+  }
+};
+
+exports.postWithdraw = async (req, res, next) => {
+  try {
+    const userId = req.session.user._id;
+    const { amount } = req.body;
+    const parsedAmount = parseFloat(amount);
+
+    // --- Basic Validations ---
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      req.flash("error", "Invalid withdrawal amount.");
+      return res.redirect("/trade"); // Or your withdrawal page
+    }
+
+    const user = await User.findById(userId).select(
+      "+cryptoWallet +depositCurrency"
+    ); // Ensure fields are selected
+    if (!user) {
+      req.flash("error", "User not found.");
+      return res.redirect("/trade");
+    }
+
+    // --- Determine Withdrawal Currency ---
+    const userDepositCurrency = user.depositCurrency; // e.g., "USDT", "BTC"
+    if (!userDepositCurrency) {
+      // Handle cases where user hasn't deposited or currency isn't set
+      req.flash("error", "Withdrawal currency not specified for user.");
+      return res.redirect("/trade");
+    }
+    const userCurrencySymbol = userDepositCurrency.toUpperCase(); // Ensure consistent casing (e.g., USDT)
+
+    // --- Map to NowPayments Ticker ---
+    const nowPaymentsCurrency = currencyMapping[userCurrencySymbol];
+    if (!nowPaymentsCurrency) {
+      console.error(
+        `No NowPayments mapping found for currency symbol: ${userCurrencySymbol}`
+      );
+      req.flash(
+        "error",
+        `Withdrawals for currency ${userCurrencySymbol} are not currently supported.`
+      );
+      return res.redirect("/trade");
+    }
+
+    // --- Get Corresponding Wallet Address ---
+    if (!user.cryptoWallet || typeof user.cryptoWallet !== "object") {
+      req.flash(
+        "error",
+        "User crypto wallet information is missing or invalid."
+      );
+      return res.redirect("/trade");
+    }
+    if (
+      userCurrencySymbol === "USDT_ERC20" ||
+      userCurrencySymbol === "USDT_TRC20"
+    ) {
+      userCurrencySymbol = "USDT";
+    }
+    const walletAddress = user.cryptoWallet[userCurrencySymbol]; // Access wallet using the symbol (e.g., user.cryptoWallet['USDT'])
+    if (!walletAddress) {
+      req.flash(
+        "error",
+        `No ${userCurrencySymbol} wallet address found in your profile.`
+      );
+      return res.redirect("/trade");
+    }
+
+    // --- Balance Check ---
+    // NOTE: This assumes user.investmentAmount is a USD-equivalent balance.
+    // If you track separate crypto balances, this check needs adjustment.
+    // For now, sticking to the original logic based on the provided code.
+    if (parsedAmount > user.investmentAmount) {
+      req.flash("error", "Insufficient balance.");
+      return res.redirect("/trade");
+    }
+
+    // --- NowPayments Authentication ---
+    const authToken = await getAuthToken();
+    if (!authToken) {
+      req.flash("error", "Failed to authenticate with payment processor.");
+      return res.redirect("/trade");
+    }
+
+    // --- Prepare NowPayments Request ---
+    const currency = nowPaymentsCurrency; // Use the mapped ticker for the API call
+    const ipnCallbackUrl = `${req.protocol}://${req.get(
+      "host"
+    )}/api/nowpayments-payout-ipn`; // Your IPN endpoint
+
+    const payoutData = {
+      ipn_callback_url: ipnCallbackUrl,
+      withdrawals: [
+        {
+          currency: currency,
+          amount: parsedAmount,
+          address: walletAddress,
+          // Optional: Add a unique ID from your system
+          // unique_external_id: `wd_${new mongoose.Types.ObjectId()}`
+        },
+      ],
+    };
+
+    // --- Call NowPayments API ---
+    let response;
+    try {
+      response = await axios.post(
+        `https://api.nowpayments.io/v1/payout`,
+        payoutData,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "x-api-key": NOWPAYMENTS_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log("NowPayments Payout Response:", response.data);
+    } catch (apiError) {
+      console.error("NowPayments API Error Data:", apiError.response?.data);
+      console.error("NowPayments API Error Status:", apiError.response?.status);
+      req.flash(
+        "error",
+        `Failed to initiate withdrawal: ${
+          apiError.response?.data?.message || "API Error"
+        }`
+      );
+      return res.redirect("/trade");
+    }
+
+    // --- Process Successful Initiation ---
+    if (
+      response.data &&
+      response.data.id &&
+      response.data.withdrawals &&
+      response.data.withdrawals.length > 0
+    ) {
+      const payoutDetails = response.data.withdrawals[0];
+
+      // Record the withdrawal attempt in your database
+      const newWithdrawal = new Withdrawal({
+        userId: userId,
+        amount: parsedAmount,
+        currency: currency, // Store the NowPayments currency ticker used
+        address: walletAddress,
+        nowPaymentsPayoutId: payoutDetails.id,
+        nowPaymentsBatchId: response.data.id,
+        status: "INITIATED",
+        nowPaymentsStatus: payoutDetails.status,
+      });
+      await newWithdrawal.save();
+
+      console.log(
+        `Withdrawal (${currency}) initiated and recorded:`,
+        newWithdrawal._id
+      );
+
+      req.flash(
+        "success",
+        "Withdrawal successfully initiated. Status will update shortly."
+      );
+      return res.redirect("/withdrawals"); // Redirect to the withdrawal history page
+    } else {
+      console.error("Unexpected NowPayments response format:", response.data);
+      req.flash(
+        "error",
+        "Withdrawal initiated but response unclear. Please check status later."
+      );
+      return res.redirect("/trade");
+    }
+  } catch (err) {
+    console.error("Withdrawal Controller Error:", err);
+    const error = new Error("An internal error occurred during withdrawal.");
+    error.httpStatusCode = 500;
+    return next(error);
   }
 };
 

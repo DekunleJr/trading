@@ -1,0 +1,76 @@
+<%- include('../includes/head.ejs') %>
+
+<body class="d-flex flex-column min-vh-100">
+  <%- include('../includes/nav.ejs') %>
+
+  <main class="flex-grow-1 container mt-5 mb-5">
+    <h1 class="text-center mb-4">Withdrawal History</h1>
+
+    <% if (!withdrawals || withdrawals.length === 0) { %>
+    <div class="alert alert-info text-center" role="alert">
+      You have no withdrawal history yet.
+    </div>
+    <% } else { %>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover table-bordered">
+        <thead class="table-dark">
+          <tr>
+            <th>Date Initiated</th>
+            <th>Amount</th>
+            <th>Currency</th>
+            <th>Status</th>
+            <th>Destination Address</th>
+            <th>Transaction Hash</th>
+            <th>Last Update</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% withdrawals.forEach(wd => { %>
+          <tr>
+            <td>
+              <%= wd.createdAt.toLocaleDateString() %> <%=
+              wd.createdAt.toLocaleTimeString() %>
+            </td>
+            <td><%= wd.amount.toFixed(2) %></td>
+            <td><%= wd.currency.toUpperCase() %></td>
+            <td>
+              <% let badgeClass = 'bg-secondary'; %> <% if (wd.status ===
+              'INITIATED') badgeClass = 'bg-info text-dark'; %> <% if (wd.status
+              === 'PROCESSING') badgeClass = 'bg-warning text-dark'; %> <% if
+              (wd.status === 'FINISHED') badgeClass = 'bg-success'; %> <% if
+              (wd.status === 'FAILED') badgeClass = 'bg-danger'; %>
+              <span class="badge <%= badgeClass %>"><%= wd.status %></span>
+            </td>
+            <td style="word-break: break-all"><%= wd.address %></td>
+            <td style="word-break: break-all">
+              <% if (wd.transactionHash) { %> <% let explorerUrl = '#'; %> <% if
+              (wd.currency === 'usdterc20') explorerUrl =
+              `https://etherscan.io/tx/${wd.transactionHash}`; %>
+              <a
+                href="<%= explorerUrl %>"
+                target="_blank"
+                title="View on Explorer"
+                ><%= wd.transactionHash.substring(0, 6) %>...<%=
+                wd.transactionHash.substring(wd.transactionHash.length - 4)
+                %></a
+              >
+              <% } else { %> N/A <% } %>
+            </td>
+            <td>
+              <%= wd.updatedAt.toLocaleDateString() %> <%=
+              wd.updatedAt.toLocaleTimeString() %>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% } %>
+
+    <div class="text-center mt-4">
+      <a href="/trade" class="btn btn-secondary">Back to Trading</a>
+    </div>
+  </main>
+
+  <%- include('../includes/footer.ejs') %> <%- include('../includes/end.ejs') %>
+</body>

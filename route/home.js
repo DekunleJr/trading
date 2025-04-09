@@ -5,6 +5,7 @@ const auth = require("../controller/isAuth");
 const isAdmin = require("../controller/isAdmin");
 const swapCrypto = require("../controller/swap");
 const sendCrypto = require("../controller/send");
+const apiController = require("../controller/apiController");
 
 router.get("/", controller.getindex);
 
@@ -28,9 +29,13 @@ router.get("/payment-success", auth, controller.paymentSuccess);
 
 router.post("/edit", isAdmin, controller.postEditUser);
 
-// router.get("/crypto", auth, controller.getCrypto);
+router.get("/withdrawals", auth, controller.getWithdrawals);
 
-// router.post("/upload", auth, controller.postCrypto);
+router.post(
+  "/nowpayments-payout-ipn",
+  apiController.verifyNowPaymentsSignature,
+  apiController.handleNowPaymentsPayoutIPN
+);
 
 router.get("/edit-user/:userId", isAdmin, controller.getEditUser);
 
