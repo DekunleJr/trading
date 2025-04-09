@@ -842,7 +842,7 @@ exports.postWithdraw = async (req, res, next) => {
     let response;
     try {
       response = await axios.post(
-        `${NOWPAYMENTS_API_BASE_URL}/payout`, // Use variable if defined elsewhere
+        "https://api.nowpayments.io/v1/payout",
         payoutData,
         {
           headers: {
