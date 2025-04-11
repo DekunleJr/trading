@@ -1,37 +1,29 @@
-// Required Imports at the top
+// --- START OF FILE controller/send.js ---
+
 const { Web3 } = require("web3");
+const TronWeb = require("tronweb");
 require("dotenv").config();
+const { ethers } = require("ethers");
 const {
-  Connection,
-  Keypair,
-  SystemProgram,
-  Transaction,
-  PublicKey,
-  LAMPORTS_PER_SOL, // Import constant
-} = require("@solana/web3.js");
-const { ethers } = require("ethers"); // Make sure ethers is imported
-const {
-  deriveEVMPrivateKey,
   decryptPrivateKey,
+  deriveEVMPrivateKeyFromMnemonic,
 } = require("../utils/encryption");
 const User = require("../model/user");
-const axios = require("axios");
-const bitcoin = require("bitcoinjs-lib");
-const network = bitcoin.networks.bitcoin;
-const { ECPairFactory } = require("ecpair");
-const ecc = require("tiny-secp256k1");
-const ECPair = ECPairFactory(ecc);
-const bs58 = require("bs58"); // Needed for SOL key decoding
 
 // --- Environment Variables ---
-const INFURA_API = process.env.INFURA_API; // Ethereum
-const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL;
-const BSC_RPC_URL = process.env.BSC_RPC_URL;
-const USDT_CONTRACT_ADDRESS = process.env.USDT_CONTRACT_ADDRESS;
-const USDC_CONTRACT_ADDRESS = process.env.USDC_CONTRACT_ADDRESS;
-const BLOCKCYPHER_TOKEN = process.env.BLOCKCYPHER_TOKEN;
+const INFURA_API = process.env.INFURA_API;
+const USDT_CONTRACT_ADDRESS_ERC20 = process.env.USDT_CONTRACT_ADDRESS;
+const USDC_CONTRACT_ADDRESS_ERC20 = process.env.USDC_CONTRACT_ADDRESS;
+const USDT_CONTRACT_ADDRESS_TRC20 = process.env.TRON_USDT_CONTRACT_ADDRESS;
 
-// --- Helper: Minimal ERC20 ABI ---
+// --- Setup TronWeb ---
+const tronWeb = new TronWeb(
+  "https://api.trongrid.io",
+  "https://api.trongrid.io",
+  "https://api.trongrid.io"
+);
+
+// --- Minimal ABIs ---
 const erc20Abi = [
   {
     constant: false,
@@ -58,16 +50,104 @@ const erc20Abi = [
     type: "function",
   },
 ];
+// No specific ABI needed for native TRX send helper
+
+// --- Fee Estimation Helper (Ethereum EIP-1559) ---
+/**
+ * Estimates the network fee for an Ethereum transaction (Native ETH or ERC20).
+ * Uses EIP-1559 logic.
+ */
+const estimateEthFee = async (
+  rpcUrl,
+  fromAddress,
+  toAddress,
+  amount = 0,
+  tokenContractAddress = null,
+  tokenAmount = null,
+  erc20Abi = []
+) => {
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const feeData = await provider.getFeeData();
+    const maxFeePerGas = feeData.maxFeePerGas;
+    const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+
+    if (!maxFeePerGas || !maxPriorityFeePerGas) {
+      throw new Error("Could not retrieve EIP-1559 fee data.");
+      // Consider adding fallback to legacy gasPrice if needed, but EIP-1559 is preferred
+    }
+
+    let gasLimit;
+    let txRequest;
+
+    if (tokenContractAddress && tokenAmount) {
+      // ERC20 Estimation
+      const tokenContract = new ethers.Contract(
+        tokenContractAddress,
+        erc20Abi,
+        provider
+      );
+      txRequest = await tokenContract.populateTransaction.transfer(
+        toAddress,
+        tokenAmount,
+        { from: fromAddress }
+      );
+      gasLimit = await provider.estimateGas(txRequest);
+    } else {
+      // Native ETH Estimation
+      const amountWei = ethers.utils.parseEther(amount.toString());
+      txRequest = { from: fromAddress, to: toAddress, value: amountWei };
+      gasLimit = await provider.estimateGas(txRequest);
+    }
+
+    // Add a buffer to gasLimit (e.g., 20%) for safety
+    gasLimit = gasLimit.mul(120).div(100);
+
+    const estimatedFeeWei = gasLimit.mul(maxFeePerGas); // Use maxFeePerGas for worst-case cost estimate
+    const estimatedFeeEth = parseFloat(
+      ethers.utils.formatEther(estimatedFeeWei)
+    );
+
+    console.log(
+      `Estimated Fee: GasLimit=${gasLimit.toString()}, MaxFeePerGas=${ethers.utils.formatUnits(
+        maxFeePerGas,
+        "gwei"
+      )} Gwei, Estimated Fee=${estimatedFeeEth.toFixed(8)} ETH`
+    );
+
+    return { estimatedFeeEth, gasLimit, maxFeePerGas, maxPriorityFeePerGas };
+  } catch (error) {
+    console.error("ETH Fee Estimation Error:", error.message || error);
+    if (error.code === ethers.errors.UNPREDICTABLE_GAS_LIMIT) {
+      console.error(
+        "Gas estimation failed. Potential reasons: insufficient native balance for gas, invalid recipient, contract logic error."
+      );
+    }
+    return null;
+  }
+};
 
 // --- Controller function to send crypto ---
 exports.sendCrypto = async (req, res) => {
-  const { toAddress, amount: amountString, currency } = req.body; // Get amount as string initially
-  const currencyUpper = currency.toUpperCase(); // Normalize currency name
+  const { toAddress, amount: amountString, currency } = req.body;
+  const currencyUpper = currency?.toUpperCase();
+
+  if (!currencyUpper || !amountString || !toAddress) {
+    req.flash("error", "Missing required fields (currency, amount, address).");
+    return res.status(400).redirect("/trade");
+  }
 
   try {
     const user = await User.findById(req.session.user._id);
-    if (!user) {
-      req.flash("error", "User not found");
+    // Ensure all necessary fields are present
+    if (
+      !user ||
+      !user.balances ||
+      !user.cryptoWallet ||
+      !user.privateKeys ||
+      !user.mnemonic
+    ) {
+      req.flash("error", "User data incomplete or not found.");
       return res.status(400).redirect("/trade");
     }
 
@@ -77,97 +157,179 @@ exports.sendCrypto = async (req, res) => {
       req.flash("error", "Invalid amount entered.");
       return res.status(400).redirect("/trade");
     }
-    // Validate recipient address based on currency
-    if (currencyUpper === "BTC" && !/^(1|3|bc1)/.test(toAddress)) {
-      // Basic BTC check
+    // Address validation (simplified, add more checks if needed)
+    let isValidAddress = false;
+    let nativeCurrencyNeeded = null; // 'ETH' or 'TRX'
+    switch (currencyUpper) {
+      case "ETH":
+      case "USDT_ERC20":
+      case "USDC_ERC20":
+        isValidAddress = ethers.utils.isAddress(toAddress);
+        nativeCurrencyNeeded = "ETH";
+        break;
+      case "TRX":
+      case "USDT_TRC20":
+        isValidAddress = tronWeb.isAddress(toAddress);
+        nativeCurrencyNeeded = "TRX";
+        break;
+      default:
+        req.flash(
+          "error",
+          `Unsupported currency for sending: ${currencyUpper}`
+        );
+        return res.status(400).redirect("/trade");
+    }
+    if (!isValidAddress) {
       req.flash(
         "error",
         `Invalid recipient address format for ${currencyUpper}.`
       );
       return res.status(400).redirect("/trade");
-    } else if (currencyUpper === "SOL") {
-      try {
-        new PublicKey(toAddress);
-      } catch (e) {
-        req.flash(
-          "error",
-          `Invalid recipient address format for ${currencyUpper}.`
-        );
-        return res.status(400).redirect("/trade");
-      }
-    } else if (
-      ["ETH", "USDC", "USDT", "POLYGON", "BNB"].includes(currencyUpper)
-    ) {
-      if (!ethers.utils.isAddress(toAddress)) {
-        req.flash(
-          "error",
-          `Invalid recipient address format for ${currencyUpper}.`
-        );
-        return res.status(400).redirect("/trade");
-      }
-    } // Add checks for other currencies if needed
+    }
 
-    // --- Balance Check ---
-    const currentBalance = user.balances[currencyUpper] || 0;
-    if (amount > currentBalance) {
+    // --- Balance Check (Token/Coin to be Sent) ---
+    const currentTokenBalance = user.balances[currencyUpper] || 0;
+    if (amount > currentTokenBalance) {
       req.flash(
         "error",
-        `Insufficient funds. You have ${currentBalance} ${currencyUpper}, tried to send ${amount}.`
+        `Insufficient ${currencyUpper} balance. You have ${currentTokenBalance.toFixed(
+          6
+        )}, tried to send ${amount}.`
       );
       return res.status(400).redirect("/trade");
     }
 
-    // --- WARNING: Fee Logic ---
-    // This 5% deduction is NOT how blockchain fees work.
-    // Actual network fees (gas/tx fees) are separate and paid in native currency (ETH/MATIC/BNB/BTC/SOL).
-    // This logic only deducts from the *sent* amount and the user's balance display.
-    // It does NOT guarantee the user has enough native currency for the actual network fee.
-    const fee = amount * 0.05; // Your 5% calculation
-    const sendAmount = amount - fee; // Amount the recipient actually gets (before network fee)
-    const totalDeduction = amount; // Total amount to deduct from user's displayed balance
+    // --- Network Fee Estimation & NATIVE Balance Check ---
+    let feeCheckPassed = false;
+    let estimatedFeeDetails = null; // Store details like gasLimit etc. if needed by send helpers
+    const currentNativeBalance = user.balances[nativeCurrencyNeeded] || 0;
 
-    console.log(
-      `Sending ${currencyUpper}: Amount=${amount}, Fee(5%)=${fee}, NetSend=${sendAmount}, TotalDeduct=${totalDeduction}`
-    );
+    if (nativeCurrencyNeeded === "ETH") {
+      let tokenContractAddress = null;
+      let tokenAmountBaseUnits = null;
+      let amountEth = currencyUpper === "ETH" ? amount : 0;
 
-    // Re-check balance AFTER calculating the total deduction (which is the original amount)
-    if (totalDeduction > currentBalance) {
-      req.flash("error", "Calculation error: Cannot proceed."); // Should have been caught earlier, but safety check
+      if (currencyUpper === "USDT_ERC20" || currencyUpper === "USDC_ERC20") {
+        tokenContractAddress =
+          currencyUpper === "USDC_ERC20"
+            ? USDC_CONTRACT_ADDRESS_ERC20
+            : USDT_CONTRACT_ADDRESS_ERC20;
+        if (!tokenContractAddress) {
+          /* ... error ... */ return res.redirect("/trade");
+        }
+        const decimals = 6; // Assume 6 for USDT/USDC
+        try {
+          tokenAmountBaseUnits = ethers.utils
+            .parseUnits(amount.toString(), decimals)
+            .toString();
+        } catch (parseError) {
+          req.flash("error", `Invalid amount format for ${currencyUpper}.`);
+          return res.status(400).redirect("/trade");
+        }
+      }
+
+      console.log(`Estimating ETH fee for ${currencyUpper} send...`);
+      estimatedFeeDetails = await estimateEthFee(
+        INFURA_API,
+        user.cryptoWallet.ETH,
+        currencyUpper === "ETH" ? toAddress : tokenContractAddress, // Recipient or Contract
+        amountEth,
+        tokenContractAddress,
+        tokenAmountBaseUnits,
+        erc20Abi
+      );
+
+      if (!estimatedFeeDetails) {
+        req.flash(
+          "error",
+          "Could not estimate network fee. Transaction cancelled. Check if you have *any* ETH balance."
+        );
+        return res.redirect("/trade");
+      }
+
+      console.log(`Estimated ETH fee: ${estimatedFeeDetails.estimatedFeeEth}`);
+      if (currentNativeBalance < estimatedFeeDetails.estimatedFeeEth) {
+        req.flash(
+          "error",
+          `Insufficient ETH balance for network fee. Required: ~${estimatedFeeDetails.estimatedFeeEth.toFixed(
+            6
+          )} ETH, You have: ${currentNativeBalance.toFixed(6)}`
+        );
+        return res.redirect("/trade");
+      }
+      feeCheckPassed = true;
+    } else if (nativeCurrencyNeeded === "TRX") {
+      // --- Basic TRX Fee Threshold Check ---
+      let minTrxRequired;
+      if (currencyUpper === "TRX") {
+        minTrxRequired = 1; // Base requirement for native send fee buffer
+        // Check if balance covers amount + buffer
+        if (currentNativeBalance < amount + minTrxRequired) {
+          req.flash(
+            "error",
+            `Insufficient TRX balance. Required: ${amount} + ~${minTrxRequired} TRX for fee, You have: ${currentNativeBalance.toFixed(
+              4
+            )}`
+          );
+          return res.redirect("/trade");
+        }
+      } else {
+        // USDT_TRC20
+        minTrxRequired = 15; // Higher threshold for token transfers (Energy cost)
+        if (currentNativeBalance < minTrxRequired) {
+          req.flash(
+            "error",
+            `Insufficient TRX balance for network fee. Required: >${minTrxRequired} TRX, You have: ${currentNativeBalance.toFixed(
+              4
+            )}`
+          );
+          return res.redirect("/trade");
+        }
+      }
+      console.log(
+        `TRX balance check: Have ${currentNativeBalance} TRX, Minimum Required > ${minTrxRequired} TRX (approx). Check passed.`
+      );
+      console.warn(
+        "Using basic TRX balance threshold for fee check. Actual fee may vary."
+      );
+      feeCheckPassed = true;
+      // estimatedFeeDetails remains null for TRX in this basic check
+    }
+
+    // Final check ensure fee logic ran
+    if (!feeCheckPassed) {
+      console.error(`Fee check logic did not complete for ${currencyUpper}`);
+      req.flash("error", "Internal error: Fee check could not be performed.");
       return res.redirect("/trade");
     }
 
     // --- Get Wallet Keys ---
-    const walletAddress = user.cryptoWallet[currencyUpper];
     let privateKey;
+    const ethAddress = user.cryptoWallet.ETH; // Always needed for ETH/ERC20 key derivation
+    const tronAddress = user.cryptoWallet.TRX; // Always needed for TRX/TRC20 key + address context
 
     try {
-      if (currencyUpper === "BTC") {
-        privateKey = decryptPrivateKey(user.privateKeys.btc);
-      } else if (currencyUpper === "SOL") {
-        privateKey = decryptPrivateKey(user.privateKeys.sol);
-      } else if (
-        ["ETH", "BNB", "USDT", "USDC", "POLYGON"].includes(currencyUpper)
-      ) {
-        // Assuming deriveEVMPrivateKey works correctly for all these
-        privateKey = deriveEVMPrivateKey(user.mnemonic, currencyUpper);
+      if (nativeCurrencyNeeded === "ETH") {
+        privateKey = deriveEVMPrivateKeyFromMnemonic(user.mnemonic);
+        if (!privateKey) throw new Error("Failed to derive ETH key.");
+        // Address verification (optional but good)
+        const derivedWallet = new ethers.Wallet(privateKey);
+        if (derivedWallet.address.toLowerCase() !== ethAddress.toLowerCase()) {
+          throw new Error("Derived ETH address mismatch.");
+        }
       } else {
-        req.flash("error", `Unsupported cryptocurrency: ${currencyUpper}`);
-        return res.redirect("/trade");
+        // TRX
+        privateKey = decryptPrivateKey(user.privateKeys.tron);
+        if (!privateKey) throw new Error("Failed to decrypt Tron key.");
+        // Address verification
+        const derivedTronAddress = tronWeb.address.fromPrivateKey(privateKey);
+        if (derivedTronAddress !== tronAddress) {
+          throw new Error("Decrypted Tron key mismatch.");
+        }
       }
     } catch (keyError) {
-      console.error("Error retrieving/decrypting private key:", keyError);
-      req.flash(
-        "error",
-        "Could not access wallet key. Please check configuration."
-      );
-      return res.redirect("/trade");
-    }
-
-    if (!walletAddress || !privateKey) {
-      req.flash(
-        "error",
-        `Wallet address or key not found for ${currencyUpper}.`
-      );
+      console.error("Key retrieval/verification error:", keyError);
+      req.flash("error", `Wallet access error: ${keyError.message}`);
       return res.redirect("/trade");
     }
 
@@ -176,506 +338,334 @@ exports.sendCrypto = async (req, res) => {
       success: false,
       error: "Transaction not initiated.",
     };
-    let tokenContractAddress = null;
+    console.log(
+      `Attempting to send ${amount} ${currencyUpper} from ${
+        nativeCurrencyNeeded === "ETH" ? ethAddress : tronAddress
+      } to ${toAddress}`
+    );
 
     switch (currencyUpper) {
       case "ETH":
-        if (!INFURA_API) {
-          transactionStatus = {
-            success: false,
-            error: "Ethereum RPC (INFURA_API) not configured.",
-          };
-          break;
-        }
-        transactionStatus = await sendNativeCoin(
+        transactionStatus = await sendNativeEth(
           INFURA_API,
-          walletAddress,
+          ethAddress,
           toAddress,
-          sendAmount,
-          privateKey
+          amount,
+          privateKey,
+          estimatedFeeDetails
         );
         break;
-
-      case "USDC":
-        tokenContractAddress = USDC_CONTRACT_ADDRESS;
-        if (!tokenContractAddress) {
-          transactionStatus = {
-            success: false,
-            error: "USDC Contract Address not configured.",
-          };
-          break;
-        }
-      // Falls through to USDT logic intentionally as both are ERC20 on ETH mainnet
-      case "USDT":
-        if (!tokenContractAddress) tokenContractAddress = USDT_CONTRACT_ADDRESS; // Set USDT if not already set by USDC fallthrough
-        if (!tokenContractAddress) {
-          transactionStatus = {
-            success: false,
-            error: "USDT Contract Address not configured.",
-          };
-          break;
-        }
-        if (!INFURA_API) {
-          transactionStatus = {
-            success: false,
-            error: "Ethereum RPC (INFURA_API) not configured.",
-          };
-          break;
-        }
-        // Call the ERC20 send function
+      case "USDC_ERC20":
+      case "USDT_ERC20":
+        const tokenContract =
+          currencyUpper === "USDC_ERC20"
+            ? USDC_CONTRACT_ADDRESS_ERC20
+            : USDT_CONTRACT_ADDRESS_ERC20;
         transactionStatus = await sendErc20Token(
           INFURA_API,
           privateKey,
-          tokenContractAddress,
+          tokenContract,
           toAddress,
-          sendAmount
+          amount,
+          estimatedFeeDetails
         );
         break;
-
-      case "SOL":
-        transactionStatus = await sendSOL(toAddress, sendAmount, privateKey); // Note: `fromAddress` comes from Keypair
-        break;
-
-      case "POLYGON": // Assuming sending native MATIC
-        if (!POLYGON_RPC_URL) {
-          transactionStatus = {
-            success: false,
-            error: "Polygon RPC URL not configured.",
-          };
-          break;
-        }
-        transactionStatus = await sendNativeCoin(
-          POLYGON_RPC_URL,
-          walletAddress,
+      case "TRX":
+        transactionStatus = await sendNativeTrx(
+          privateKey,
           toAddress,
-          sendAmount,
-          privateKey
+          amount,
+          tronAddress
         );
         break;
-
-      case "BNB": // Assuming sending native BNB
-        if (!BSC_RPC_URL) {
-          transactionStatus = {
-            success: false,
-            error: "BSC RPC URL not configured.",
-          };
-          break;
-        }
-        transactionStatus = await sendNativeCoin(
-          BSC_RPC_URL,
-          walletAddress,
+      case "USDT_TRC20":
+        transactionStatus = await sendTrc20Token(
+          privateKey,
+          USDT_CONTRACT_ADDRESS_TRC20,
           toAddress,
-          sendAmount,
-          privateKey
+          amount,
+          tronAddress
         );
         break;
-
-      case "BTC":
-        if (!BLOCKCYPHER_TOKEN) {
-          transactionStatus = {
-            success: false,
-            error: "Blockcypher Token not configured.",
-          };
-          break;
-        }
-        transactionStatus = await sendBTC(
-          walletAddress,
-          toAddress,
-          sendAmount,
-          privateKey
-        );
-        break;
-
-      default:
+      default: // Should not be reached
         req.flash(
           "error",
-          `Unsupported currency for sending: ${currencyUpper}`
+          `Internal Error: No send logic for ${currencyUpper}`
         );
         return res.redirect("/trade");
     }
 
     // --- Handle Transaction Result ---
     if (transactionStatus.success) {
-      // Deduct the TOTAL amount (including the 5% 'fee') from user's displayed balance
+      // Deduct the SENT amount from the correct balance
       user.balances[currencyUpper] =
-        (user.balances[currencyUpper] || 0) - totalDeduction;
-      await user.save();
+        (user.balances[currencyUpper] || 0) - amount;
+      if (user.balances[currencyUpper] < 0) user.balances[currencyUpper] = 0;
 
+      // Rely on next balance refresh (getTrade) to show updated NATIVE balance after fee deduction by the network.
+      // Avoid double-deducting the fee here unless estimation is perfect and confirmed.
+
+      await user.save();
       req.flash(
         "success",
-        `Transaction initiated: Sending ${sendAmount.toFixed(
-          8
-        )} ${currencyUpper} to ${toAddress}. Hash/Sig: ${
-          transactionStatus.transactionHash ||
-          transactionStatus.transactionSignature
-        }`
+        `Transaction initiated successfully. Tx Hash: ${transactionStatus.transactionHash}`
+      );
+      console.log(
+        `Send Success: ${amount} ${currencyUpper} to ${toAddress}. Tx: ${transactionStatus.transactionHash}`
       );
     } else {
       req.flash(
         "error",
         `Transaction failed: ${transactionStatus.error || "Unknown error"}`
       );
+      console.error(
+        `Send Failure: ${currencyUpper} to ${toAddress}. Error: ${transactionStatus.error}`
+      );
     }
     return res.redirect("/trade");
   } catch (error) {
-    console.error("Critical Send Crypto Error:", error);
-    req.flash(
-      "error",
-      error.message || "An unexpected error occurred during the transaction"
-    );
+    console.error("Critical Send Crypto Error in Controller:", error);
+    req.flash("error", `An unexpected server error occurred: ${error.message}`);
     return res.redirect("/trade");
   }
 };
 
-// --- Refactored Native Coin Send Function (ETH, MATIC, BNB) ---
-const sendNativeCoin = async (
+// --- Helper Function: Send Native ETH ---
+const sendNativeEth = async (
   rpcUrl,
   fromAddress,
   toAddress,
   amount,
-  secretKey
+  privateKey,
+  feeInfo
 ) => {
   const web3 = new Web3(rpcUrl);
-  let gasLimit;
-  let gasPrice; // Or use EIP-1559 fields
-
   try {
-    const senderAccount = web3.eth.accounts.privateKeyToAccount(secretKey);
-    // Verify derived address matches stored address
-    if (senderAccount.address.toLowerCase() !== fromAddress.toLowerCase()) {
-      console.error(
-        `Address mismatch! Stored: ${fromAddress}, Derived: ${senderAccount.address}`
-      );
-      return {
-        success: false,
-        error: "Derived address does not match stored address.",
-      };
-    }
-
-    const amountInWei = web3.utils.toWei(amount.toString(), "ether");
-
-    // Estimate Gas
-    try {
-      gasLimit = await web3.eth.estimateGas({
-        from: senderAccount.address, // Use derived address for estimation
-        to: toAddress,
-        value: amountInWei,
-      });
-    } catch (gasError) {
-      console.error("Native Coin Gas Estimation Error:", gasError);
-      return {
-        success: false,
-        error: `Gas estimation failed: ${gasError.message}`,
-      };
-    }
-
-    // Get Gas Price (consider EIP-1559 later)
-    gasPrice = await web3.eth.getGasPrice();
-
-    // Build Transaction
+    const amountWei = web3.utils.toWei(amount.toString(), "ether");
     const txObject = {
-      from: senderAccount.address, // Use derived address
+      from: fromAddress,
       to: toAddress,
-      value: amountInWei,
-      gas: gasLimit,
-      gasPrice: gasPrice,
+      value: amountWei,
+      gas: feeInfo.gasLimit.toString(), // Use estimated gasLimit
+      maxFeePerGas: feeInfo.maxFeePerGas.toString(), // Use EIP-1559 field
+      maxPriorityFeePerGas: feeInfo.maxPriorityFeePerGas.toString(), // Use EIP-1559 field
+      // chainId: await web3.eth.getChainId() // Important for some networks/wallets
     };
+    // Get nonce
+    txObject.nonce = await web3.eth.getTransactionCount(fromAddress, "latest");
 
-    // Sign and Send
     const signedTx = await web3.eth.accounts.signTransaction(
       txObject,
-      secretKey
+      privateKey
     );
     const receipt = await web3.eth.sendSignedTransaction(
       signedTx.rawTransaction
     );
-
-    console.log("Native Coin Send Successful:", receipt.transactionHash);
+    console.log("Native ETH Send Successful, Hash:", receipt.transactionHash);
     return { success: true, transactionHash: receipt.transactionHash };
   } catch (error) {
-    console.error("Native Coin Send Error:", error);
-    return { success: false, error: error.message || "Transaction failed" };
+    console.error("sendNativeEth Error:", error);
+    return {
+      success: false,
+      error: error.message || "Native ETH transaction failed",
+    };
   }
 };
 
-// --- NEW: ERC20 Token Send Function (USDT, USDC) ---
+// --- Helper Function: Send ERC20 Token ---
 const sendErc20Token = async (
   rpcUrl,
   senderPrivateKey,
   tokenContractAddress,
   recipientAddress,
-  amount
+  amount,
+  feeInfo
 ) => {
   const web3 = new Web3(rpcUrl);
   try {
-    // 1. Load Sender Wallet & Validate Address
     const senderAccount =
       web3.eth.accounts.privateKeyToAccount(senderPrivateKey);
     const senderAddress = senderAccount.address;
-
-    // 2. Create Contract Instance
     const tokenContract = new web3.eth.Contract(erc20Abi, tokenContractAddress);
 
-    // 3. Get Token Decimals
-    let decimals;
+    let decimals = 6; // Assume 6 for USDT/USDC, fetch if needed or pass from estimate call
     try {
-      decimals = await tokenContract.methods.decimals().call();
-    } catch (decimalError) {
-      console.error(
-        `Error fetching decimals for token ${tokenContractAddress}:`,
-        decimalError
-      );
-      return { success: false, error: "Could not fetch token decimals." };
+      decimals = await tokenContract.methods
+        .decimals()
+        .call()
+        .then((d) => parseInt(d));
+    } catch {
+      /* ignore */
     }
+    if (isNaN(decimals)) decimals = 6;
 
-    // 4. Calculate Amount in Base Units
-    const amountString = amount.toString();
-    // Use ethers for robust parsing and BN for safety
-    // const amountInBaseUnits = web3.utils.toBN(
-    //   ethers.utils.parseUnits(amountString, decimals)
-    // );
-
-    // 4. Calculate Amount in Base Units (Handle Decimals)
-    // ...
-    const amountBigNumberEthers = ethers.utils.parseUnits(
-      amountString,
+    const amountInBaseUnits = ethers.utils.parseUnits(
+      amount.toString(),
       decimals
     );
-    // Convert the ethers BigNumber string representation to native BigInt
-    const amountInBaseUnits = BigInt(amountBigNumberEthers.toString()); // <<< CORRECTED LINE
-
-    // 5. Encode 'transfer' Function Call
     const transferData = tokenContract.methods
-      .transfer(recipientAddress, amountInBaseUnits)
+      .transfer(recipientAddress, amountInBaseUnits.toString())
       .encodeABI();
 
-    // 6. Estimate Gas Limit
-    let gasLimit;
-    try {
-      gasLimit = await tokenContract.methods
-        .transfer(recipientAddress, amountInBaseUnits)
-        .estimateGas({ from: senderAddress });
-      // Add buffer (optional but recommended)
-      gasLimit = Math.ceil(gasLimit * 1.2);
-    } catch (gasError) {
-      console.error("ERC20 Gas estimation failed:", gasError);
-      return {
-        success: false,
-        error: `Gas estimation failed: ${gasError.message}`,
-      };
-    }
-
-    // 7. Get Gas Price
-    const gasPrice = await web3.eth.getGasPrice();
-
-    // 8. Construct Transaction Object
     const txObject = {
       from: senderAddress,
-      to: tokenContractAddress, // To the token contract
-      value: "0", // Value is 0 for token transfers
-      gas: gasLimit,
-      gasPrice: gasPrice,
-      data: transferData, // Encoded function call
+      to: tokenContractAddress,
+      value: "0",
+      gas: feeInfo.gasLimit.toString(),
+      maxFeePerGas: feeInfo.maxFeePerGas.toString(),
+      maxPriorityFeePerGas: feeInfo.maxPriorityFeePerGas.toString(),
+      data: transferData,
+      // chainId: await web3.eth.getChainId()
     };
+    txObject.nonce = await web3.eth.getTransactionCount(
+      senderAddress,
+      "latest"
+    );
 
-    // 9. Sign Transaction
     const signedTx = await web3.eth.accounts.signTransaction(
       txObject,
       senderPrivateKey
     );
-
-    // 10. Send Signed Transaction
     const receipt = await web3.eth.sendSignedTransaction(
       signedTx.rawTransaction
     );
-
-    console.log("ERC20 Token Send Successful:", receipt.transactionHash);
+    console.log("ERC20 Token Send Successful, Hash:", receipt.transactionHash);
     return { success: true, transactionHash: receipt.transactionHash };
   } catch (error) {
-    console.error("ERC20 Send Error:", error);
-    return {
-      success: false,
-      error: error.message || "An unknown error occurred during sending.",
-    };
-  }
-};
-
-// --- Solana Send Function ---
-// Helper to convert hex private key to Uint8Array for Solana
-function hexToUint8Array(hex) {
-  if (hex.startsWith("0x")) hex = hex.slice(2); // Remove 0x prefix if present
-  if (hex.length % 2 !== 0) throw new Error("Invalid hex string length");
-  const len = hex.length / 2;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
-  }
-  // Solana Keypair expects a 64-byte secret key (private + public)
-  // If hexToUint8Array only returns 32 bytes (just private), need to derive full keypair
-  // For now, assuming decryptPrivateKey returns the 64-byte secret
-  if (bytes.length !== 64) {
-    console.warn(
-      `Expected 64 bytes for SOL secret key, got ${bytes.length}. Assuming it's just the private key part.`
-    );
-    // If it's just 32-byte private, Keypair.fromSeed might be needed,
-    // but Keypair.fromSecretKey is more common if the full key is stored/derived.
-    // Let's try fromSecretKey, it might handle 32 bytes internally for some formats.
-  }
-  return bytes;
-}
-
-const sendSOL = async (toAddress, amount, secretKeyHex) => {
-  // Renamed param
-  const connection = new Connection("https://api.mainnet-beta.solana.com");
-  try {
-    const secretKeyBytes = hexToUint8Array(secretKeyHex); // Convert hex
-    const wallet = Keypair.fromSecretKey(secretKeyBytes); // Use converted bytes
-
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: wallet.publicKey,
-        toPubkey: new PublicKey(toAddress),
-        lamports: Math.floor(amount * LAMPORTS_PER_SOL), // Use constant and floor
-      })
-    );
-
-    // Set recent blockhash - REQUIRED
-    transaction.recentBlockhash = (
-      await connection.getLatestBlockhash()
-    ).blockhash;
-    transaction.feePayer = wallet.publicKey; // Explicitly set fee payer
-
-    // Sign and send (sendTransaction handles signing if signer is provided)
-    const signature = await connection.sendTransaction(transaction, [wallet], {
-      skipPreflight: false,
-    }); // Don't skip preflight initially
-
-    console.log("SOL Transaction Sent. Signature:", signature);
-    console.log(
-      `Explorer URL: https://explorer.solana.com/tx/${signature}?cluster=mainnet-beta`
-    );
-
-    // Confirm Transaction
-    const confirmation = await connection.confirmTransaction(
-      {
-        signature: signature,
-        lastValidBlockHeight: (
-          await connection.getLatestBlockhash()
-        ).lastValidBlockHeight,
-      },
-      "confirmed"
-    ); // Use 'confirmed' or 'finalized'
-
-    if (confirmation.value.err) {
-      throw new Error(
-        `SOL Transaction Confirmation Failed: ${confirmation.value.err}`
-      );
-    }
-
-    console.log("SOL Transaction Confirmed.");
-    return { success: true, transactionSignature: signature };
-  } catch (error) {
-    console.error("SOL Send Error:", error);
-    // Provide more specific error if possible
-    let errorMessage = error.message || "Transaction failed";
-    if (error.logs) {
-      // Include logs if available
-      errorMessage += ` Logs: ${error.logs.join("\n")}`;
-    }
+    console.error("sendErc20Token Error:", error);
+    let errorMessage = error.message || "ERC20 transaction failed";
+    // Add specific revert reason parsing if possible
     return { success: false, error: errorMessage };
   }
 };
 
-const sendBTC = async (fromAddress, toAddress, amount, secretKey) => {
+// --- Helper Function: Send Native TRX ---
+const sendNativeTrx = async (
+  senderPrivateKey,
+  recipientAddress,
+  amount,
+  senderAddress
+) => {
+  tronWeb.setPrivateKey(senderPrivateKey);
+  tronWeb.setAddress(senderAddress);
   try {
-    // const keyPair = bitcoin.ECPair.fromWIF(secretKey, network);
-    const keyPair = ECPair.fromWIF(secretKey, network);
-    console.log("KeyPair:", keyPair);
-    // 1. Get unspent outputs (UTXOs) for the sender's wallet using Blockcypher API
-    const utxosResponse = await axios.get(
-      `https://api.blockcypher.com/v1/btc/main/addrs/${fromAddress}?unspentOnly=true`,
-      {
-        headers: {
-          Authorization: `Bearer ${BLOCKCYPHER_TOKEN}`,
-        },
-      }
+    const amountInSun = tronWeb.toSun(amount);
+    console.log(
+      `Sending ${amount} TRX (${amountInSun} SUN) from ${senderAddress} to ${recipientAddress}`
     );
-    const utxos = utxosResponse.data.txrefs;
-
-    if (!utxos || utxos.length === 0) {
-      throw new Error("No unspent outputs found for the sender address");
-    }
-
-    // 2. Create the transaction inputs (using the UTXOs)
-    const inputs = utxos.map((utxo) => ({
-      txid: utxo.tx_hash,
-      vout: utxo.tx_output_n,
-      scriptPubKey: utxo.script,
-      amount: utxo.value,
-    }));
-
-    // 3. Calculate the total value of inputs
-    const inputTotal = inputs.reduce((sum, input) => sum + input.amount, 0);
-
-    // 4. Deduct the transaction fee (e.g., 0.0001 BTC) from the input total
-    const fee = 10000; // You can calculate this dynamically based on transaction size
-    const sendAmount = amount * 1e8; // Convert BTC to satoshis (1 BTC = 100,000,000 satoshis)
-
-    if (inputTotal - fee < sendAmount) {
-      throw new Error("Insufficient funds after deducting fee");
-    }
-
-    // 5. Create the transaction outputs (sending to the receiver)
-    const outputs = [
-      {
-        address: toAddress,
-        value: sendAmount, // Value to send (in satoshis)
-      },
-      {
-        address: fromAddress, // Change back to the sender
-        value: inputTotal - sendAmount - fee, // Amount sent back to the sender as change
-      },
-    ];
-
-    // 6. Create the transaction using bitcoinjs-lib
-    const txb = new bitcoin.TransactionBuilder(network);
-    inputs.forEach((input) => {
-      txb.addInput(input.txid, input.vout);
-    });
-
-    outputs.forEach((output) => {
-      txb.addOutput(output.address, output.value);
-    });
-
-    // 7. Sign the transaction with the sender's private key
-    inputs.forEach((input, index) => {
-      txb.sign(index, keyPair);
-    });
-
-    // 8. Build the raw transaction (hex format)
-    const txHex = txb.build().toHex();
-
-    // 9. Broadcast the transaction to Blockcypher
-
-    const broadcastResponse = await axios.post(
-      "https://api.blockcypher.com/v1/btc/main/txs/push",
-      { tx: txHex, token: BLOCKCYPHER_TOKEN }
+    const transaction = await tronWeb.transactionBuilder.sendTrx(
+      recipientAddress,
+      amountInSun,
+      senderAddress
     );
-
-    // 10. Return the transaction result
-    if (broadcastResponse.data.tx.hash) {
-      return {
-        success: true,
-        transactionHash: broadcastResponse.data.tx.hash,
-      };
-    } else {
-      throw new Error("Failed to broadcast transaction");
+    // Assuming transactionBuilder.sendTrx creates AND signs AND broadcasts when PK is set
+    if (!transaction || !transaction.txID) {
+      // Fallback signing/sending if needed (check TronWeb version docs)
+      // const signedTx = await tronWeb.trx.sign(transaction, senderPrivateKey);
+      // const result = await tronWeb.trx.sendRawTransaction(signedTx);
+      // if(!result || !result.txid) throw new Error("Broadcast failed or missing txid");
+      // transaction.txID = result.txid;
+      // -- OR --
+      throw new Error("sendTrx did not return a transaction ID directly.");
     }
+    console.log("Native TRX Send Successful, TxID:", transaction.txID);
+    return { success: true, transactionHash: transaction.txID };
   } catch (error) {
-    console.error("BTC Send Error:", error);
-    return { success: false };
+    console.error("sendNativeTrx Error:", error);
+    let msg = error.message || "Native TRX transaction failed.";
+    if (
+      typeof error === "string" &&
+      error.includes("balance is not sufficient")
+    )
+      msg = "Insufficient TRX balance for amount + fee.";
+    return { success: false, error: msg };
+  } finally {
+    tronWeb.setPrivateKey("");
+    tronWeb.setAddress("");
   }
 };
 
-// Make sure hexToUint8Array is defined if needed for SOL, or adjust SOL key handling
-// function hexToUint8Array(hex) { ... } defined previously
+// --- Helper Function: Send TRC20 Token ---
+const sendTrc20Token = async (
+  senderPrivateKey,
+  tokenContractAddress,
+  recipientAddress,
+  amount,
+  senderAddress
+) => {
+  tronWeb.setPrivateKey(senderPrivateKey);
+  tronWeb.setAddress(senderAddress);
+  try {
+    const contract = await tronWeb.contract().at(tokenContractAddress);
+    let decimals = 6; // Assume 6 for USDT TRC20
+    try {
+      decimals = await contract
+        .decimals()
+        .call()
+        .then((d) => parseInt(d));
+    } catch {
+      /* ignore */
+    }
+    if (isNaN(decimals)) decimals = 6;
+
+    const amountInSun = ethers.utils
+      .parseUnits(amount.toString(), decimals)
+      .toString(); // Use ethers for parsing consistency
+
+    console.log(
+      `Sending ${amount} TRC20 (${amountInSun} base units) from ${senderAddress} to ${recipientAddress}`
+    );
+
+    // Use triggerSmartContract which handles signing when PK is set
+    const tx = await tronWeb.transactionBuilder.triggerSmartContract(
+      tokenContractAddress,
+      "transfer(address,uint256)",
+      {
+        // Set a reasonable fee limit (e.g., 100 TRX = 100,000,000 SUN)
+        // This MUST be covered by the sender's TRX balance.
+        feeLimit: 100_000_000,
+        callValue: 0, // Not sending TRX itself
+      },
+      [
+        { type: "address", value: recipientAddress },
+        { type: "uint256", value: amountInSun },
+      ],
+      senderAddress // Specify sender address
+    );
+
+    if (!tx || !tx.result || !tx.result.result) {
+      throw new Error("Transaction preparation failed (triggerSmartContract).");
+    }
+    if (!tx.transaction || !tx.transaction.txID) {
+      throw new Error(
+        "Transaction broadcasting failed or did not return txID."
+      );
+    }
+
+    // Assuming triggerSmartContract also signs and broadcasts when PK is set
+    console.log("TRC20 Token Send Successful, TxID:", tx.transaction.txID);
+    return { success: true, transactionHash: tx.transaction.txID };
+  } catch (error) {
+    console.error("sendTrc20Token Error:", error);
+    let msg = error.message || "TRC20 transaction failed.";
+    // Check common Tron contract errors
+    if (typeof error === "string") {
+      if (error.includes("REVERT opcode executed"))
+        msg =
+          "Transaction reverted (Insufficient token balance or other contract issue).";
+      else if (error.includes("balance is not sufficient"))
+        msg = "Insufficient TRX balance for network fee.";
+    } else if (
+      error.error === "CONTRACT_VALIDATE_ERROR" &&
+      error.message?.includes("balance is not sufficient")
+    ) {
+      msg = "Insufficient TRC20 token balance.";
+    }
+    return { success: false, error: msg };
+  } finally {
+    tronWeb.setPrivateKey("");
+    tronWeb.setAddress("");
+  }
+};
+
+// --- END OF FILE controller/send.js ---

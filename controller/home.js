@@ -2,12 +2,10 @@ const User = require("../model/user");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
 const { validationResult } = require("express-validator");
-const fs = require("fs");
-const path = require("path");
 const { ethers } = require("ethers");
-const { Connection, PublicKey } = require("@solana/web3.js");
 const axios = require("axios");
-const Withdrawal = require("../model/withdrawal"); // Ensure path is correct
+const Withdrawal = require("../model/withdrawal");
+const TronWeb = require("tronweb");
 
 const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
 const NOWPAYMENTS_EMAIL = process.env.NOWPAYMENTS_EMAIL;
@@ -36,25 +34,17 @@ async function getAuthToken() {
   }
 }
 
-// --- Currency Mapping ---
-// Keys should match format stored in user.depositCurrency
-// Values are NowPayments PAYOUT tickers (Verify these!)
 const currencyMapping = {
-  BTC: "btc",
   ETH: "eth",
-  USDT: "usdterc20", // Default USDT if simple symbol stored
-  USDT_ERC20: "usdterc20",
   USDT_TRC20: "usdttrc20",
-  BNB: "bnbmainnet", // Verify ticker
-  SOL: "sol",
-  USDC: "usdcerc20", // Default USDC if simple symbol stored
-  USDC_ERC20: "usdcerc20", // Use Latin 'c', verify ticker
-  MATIC: "matic", // Verify ticker
-  // Add all other supported currency/network combinations
+  USDT_ERC20: "usdterc20",
+  USDC_ERC20: "usdc",
+  TRX: "trx",
 };
 // Create a list of allowed keys used in postDeposit validation
 const ALLOWED_DEPOSIT_CURRENCY_KEYS = Object.keys(currencyMapping);
 
+const erc20Abi = ["function balanceOf(address owner) view returns (uint256)"];
 // --- Controller Functions ---
 
 exports.getWithdrawals = async (req, res, next) => {
@@ -125,8 +115,6 @@ exports.getContact = async (req, res, next) => {
   }
 };
 
-const erc20Abi = ["function balanceOf(address owner) view returns (uint256)"];
-
 exports.getTrade = async (req, res, next) => {
   let user;
   const userId = req.session.user?._id; // Use optional chaining
@@ -151,13 +139,11 @@ exports.getTrade = async (req, res, next) => {
 
     // Use balances from DB as default/fallback
     const currentBalances = {
-      BTC: user.balances?.BTC ?? 0,
       ETH: user.balances?.ETH ?? 0,
-      BNB: user.balances?.BNB ?? 0,
-      SOL: user.balances?.SOL ?? 0,
-      USDT: user.balances?.USDT ?? 0,
-      POLYGON: user.balances?.POLYGON ?? 0, // Check schema field name consistency
-      USDC: user.balances?.USDC ?? 0,
+      USDT_ERC20: user.balances?.USDT_ERC20 ?? 0,
+      USDC_ERC20: user.balances?.USDC_ERC20 ?? 0,
+      USDT_TRC20: user.balances?.USDT_TRC20 ?? 0,
+      TRX: user.balances?.TRX ?? 0,
     };
 
     const liveBalances = {};
@@ -188,32 +174,9 @@ exports.getTrade = async (req, res, next) => {
       );
     }
 
-    // BNB
-    if (user.cryptoWallet?.BNB) {
-      fetchPromises.push(
-        (async () => {
-          try {
-            const bscProvider = new ethers.providers.JsonRpcProvider(
-              "https://bsc-dataseed.binance.org/"
-            );
-            const bnbBalanceWei = await bscProvider.getBalance(
-              user.cryptoWallet.BNB
-            );
-            liveBalances.BNB = parseFloat(
-              ethers.utils.formatEther(bnbBalanceWei)
-            );
-          } catch (err) {
-            console.error(
-              `Failed to fetch BNB balance for ${userId}: ${err.message} (Code: ${err.code})`
-            );
-          }
-        })()
-      );
-    }
-
     // USDT (ERC20)
     if (
-      user.cryptoWallet?.USDT &&
+      user.cryptoWallet?.USDT_ERC20 &&
       process.env.USDT_CONTRACT_ADDRESS &&
       process.env.INFURA_API
     ) {
@@ -230,9 +193,9 @@ exports.getTrade = async (req, res, next) => {
             );
             // Use USDT field if it holds the ETH-compatible address
             const usdtBalanceUnits = await usdtContract.balanceOf(
-              user.cryptoWallet.USDT
+              user.cryptoWallet.USDT_ERC20
             );
-            liveBalances.USDT = parseFloat(
+            liveBalances.USDT_ERC20 = parseFloat(
               ethers.utils.formatUnits(usdtBalanceUnits, 6)
             ); // Assuming 6 decimals
           } catch (err) {
@@ -246,7 +209,7 @@ exports.getTrade = async (req, res, next) => {
 
     // USDC (ERC20)
     if (
-      user.cryptoWallet?.USDC &&
+      user.cryptoWallet?.USDC_ERC20 &&
       process.env.USDC_CONTRACT_ADDRESS &&
       process.env.INFURA_API
     ) {
@@ -262,9 +225,9 @@ exports.getTrade = async (req, res, next) => {
               provider
             );
             const usdcBalanceUnits = await usdcContract.balanceOf(
-              user.cryptoWallet.USDC
+              user.cryptoWallet.USDC_ERC20
             );
-            liveBalances.USDC = parseFloat(
+            liveBalances.USDC_ERC20 = parseFloat(
               ethers.utils.formatUnits(usdcBalanceUnits, 6)
             ); // Assuming 6 decimals
           } catch (err) {
@@ -276,78 +239,89 @@ exports.getTrade = async (req, res, next) => {
       );
     }
 
-    // SOL
-    if (user.cryptoWallet?.SOL) {
+    // USDT (TRC20)
+    const tronWeb = new TronWeb(
+      "https://api.trongrid.io",
+      "https://api.trongrid.io",
+      "https://api.trongrid.io"
+    );
+
+    const trc20Abi = [
+      {
+        constant: true,
+        inputs: [{ name: "owner", type: "address" }],
+        name: "balanceOf",
+        outputs: [{ name: "balance", type: "uint256" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        constant: true,
+        inputs: [],
+        name: "decimals",
+        outputs: [{ name: "", type: "uint8" }],
+        stateMutability: "view",
+        type: "function",
+      },
+    ];
+
+    if (
+      user.cryptoWallet.USDT_TRC20 &&
+      process.env.TRON_USDT_CONTRACT_ADDRESS
+    ) {
       fetchPromises.push(
         (async () => {
           try {
-            const solanaConnection = new Connection(
-              "https://api.mainnet-beta.solana.com"
+            const tronAddress = user.cryptoWallet.USDT_TRC20;
+            const contract = await tronWeb.contract(
+              trc20Abi,
+              process.env.TRON_USDT_CONTRACT_ADDRESS
             );
-            const solPublicKey = new PublicKey(user.cryptoWallet.SOL);
-            const solBalanceLamports = await solanaConnection.getBalance(
-              solPublicKey
+            // Use TronWeb specific call format
+            const [balanceResult, decimalsResult] = await Promise.all([
+              contract.methods
+                .balanceOf(tronAddress)
+                .call({ from: tronAddress }),
+              contract.methods
+                .decimals()
+                .call({ from: tronAddress })
+                .catch(() => 6),
+            ]);
+
+            // TronWeb might return BigNumber or string, format consistently
+            const decimals = parseInt(decimalsResult);
+            liveBalances.USDT_TRC20 = parseFloat(
+              ethers.utils.formatUnits(balanceResult.toString(), decimals)
             );
-            liveBalances.SOL = solBalanceLamports / 1e9;
           } catch (err) {
+            // Log Tron-specific errors if possible
+            const errorMessage = typeof err === "string" ? err : err.message;
             console.error(
-              `Failed to fetch SOL balance for ${userId}: ${err.message}`
+              `Failed to fetch USDT TRC20 balance for ${userId} (${user.cryptoWallet.USDT_TRC20}): ${errorMessage}`
             );
           }
         })()
       );
     }
 
-    // BTC
-    if (user.cryptoWallet?.BTC) {
+    // --- ADD NATIVE TRX BALANCE FETCH ---
+    if (user.cryptoWallet.TRX) {
       fetchPromises.push(
         (async () => {
+          const tronAddress = user.cryptoWallet.TRX;
           try {
-            const btcResponse = await axios.get(
-              `https://blockchain.info/q/addressbalance/${user.cryptoWallet.BTC}`
-            );
-            if (typeof btcResponse.data === "number") {
-              liveBalances.BTC = btcResponse.data / 1e8;
-            } else {
-              console.error(
-                `Failed to fetch BTC balance for ${userId}: Invalid response data type - ${typeof btcResponse.data}`
-              );
-            }
+            const balanceInSun = await tronWeb.trx.getBalance(tronAddress);
+            // Convert SUN to TRX (1 TRX = 1,000,000 SUN)
+            liveBalances.TRX = parseFloat(tronWeb.fromSun(balanceInSun));
           } catch (err) {
-            const errorMsg = err.response
-              ? `${err.message} (Status: ${err.response.status})`
-              : err.message;
             console.error(
-              `Failed to fetch BTC balance for ${userId}: ${errorMsg}`
+              `Failed fetch TRX balance for ${userId} (${tronAddress}):`,
+              err
             );
           }
         })()
       );
     }
-
-    // POLYGON (MATIC)
-    if (user.cryptoWallet?.POLYGON) {
-      fetchPromises.push(
-        (async () => {
-          try {
-            const polygonProvider = new ethers.providers.JsonRpcProvider(
-              "https://polygon-rpc.com"
-            );
-            const maticBalanceWei = await polygonProvider.getBalance(
-              user.cryptoWallet.POLYGON
-            );
-            liveBalances.POLYGON = parseFloat(
-              ethers.utils.formatEther(maticBalanceWei)
-            );
-          } catch (err) {
-            console.error(
-              `Failed to fetch MATIC balance for ${userId}: ${err.message} (Code: ${err.code})`
-            );
-          }
-        })()
-      );
-    }
-
     // --- Execute all balance fetches concurrently ---
     await Promise.allSettled(fetchPromises); // Waits for all to finish, regardless of success/failure
 
@@ -482,8 +456,6 @@ exports.postContact = async (req, res, next) => {
     next(err);
   }
 };
-
-// --- DELETED Older/Commented out postWithdraw function ---
 
 exports.postDeleteUser = async (req, res, next) => {
   const userId = req.body.userId;
@@ -678,21 +650,6 @@ exports.postDeposit = async (req, res, next) => {
       cancel_url: cancel_url,
     };
 
-    // Check for mock/skip flag (use a clearer name)
-    const SKIP_INVOICE_CREATION = process.env.SKIP_INVOICE_CREATION === "true";
-
-    if (SKIP_INVOICE_CREATION) {
-      console.warn(
-        "Skipping NowPayments invoice creation (SKIP_INVOICE_CREATION=true)"
-      );
-      // ** FOR TESTING ONLY - Simulate success but DO NOT update balance here **
-      req.flash(
-        "info",
-        "Skipped payment gateway. Redirecting to success page (TESTING ONLY)."
-      );
-      return res.redirect(success_url);
-    }
-
     // 6. Make the API Call
     const response = await axios.post(
       "https://api.nowpayments.io/v1/invoice",
@@ -733,11 +690,10 @@ exports.postDeposit = async (req, res, next) => {
       console.error("Deposit Process Error:", err);
     }
     req.flash("error", errorMsg);
-    return res.redirect("/deposit");
+    return res.redirect("/trade");
   }
 };
 
-// --- THIS IS THE CORRECT, ACTIVE postWithdraw ---
 exports.postWithdraw = async (req, res, next) => {
   try {
     const userId = req.session.user?._id;
@@ -789,14 +745,6 @@ exports.postWithdraw = async (req, res, next) => {
     }
 
     let walletLookupSymbol = userDepositCurrency.toUpperCase();
-    if (
-      walletLookupSymbol === "USDT_ERC20" ||
-      walletLookupSymbol === "USDT_TRC20"
-    ) {
-      walletLookupSymbol = "USDT";
-    } else if (walletLookupSymbol === "USDC_ERC20") {
-      walletLookupSymbol = "USDC";
-    }
     // Add more normalization if needed based on cryptoWallet keys
 
     if (!user.cryptoWallet || typeof user.cryptoWallet !== "object") {

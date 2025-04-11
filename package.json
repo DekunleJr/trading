@@ -13,13 +13,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@solana/web3.js": "^1.43.0",
     "@uniswap/v2-periphery": "^1.1.0-beta.0",
     "axios": "^1.8.2",
     "bcryptjs": "^3.0.2",
-    "bitcoinjs-lib": "^6.1.7",
     "body-parser": "^1.20.3",
-    "bs58": "^6.0.0",
     "compression": "^1.8.0",
     "connect-flash": "^0.1.1",
     "connect-mongodb-session": "^5.0.0",
@@ -28,7 +25,6 @@
     "crypto-js": "^4.2.0",
     "csurf": "^1.2.2",
     "dotenv": "^16.4.7",
-    "ecpair": "^3.0.0",
     "ejs": "^3.1.10",
     "ethers": "^5.8.0",
     "express": "^4.21.2",
@@ -39,7 +35,6 @@
     "mongoose": "^8.11.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "node-binance-api": "^1.0.1",
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.10.0",
@@ -47,7 +42,7 @@
     "punycode": "^2.3.1",
     "solana-web3.js": "^0.0.1-security",
     "stripe": "^17.7.0",
-    "tiny-secp256k1": "^2.2.3",
+    "tronweb": "^5.3.3",
     "web3": "^4.16.0"
   }
 }

@@ -3,7 +3,6 @@ const router = express.Router();
 const controller = require("../controller/home");
 const auth = require("../controller/isAuth");
 const isAdmin = require("../controller/isAdmin");
-const swapCrypto = require("../controller/swap");
 const sendCrypto = require("../controller/send");
 const apiController = require("../controller/apiController");
 
@@ -32,14 +31,12 @@ router.post("/edit", isAdmin, controller.postEditUser);
 router.get("/withdrawals", auth, controller.getWithdrawals);
 
 router.post(
-  "/nowpayments-payout-ipn",
+  "/api/nowpayments-payout-ipn",
   apiController.verifyNowPaymentsSignature,
   apiController.handleNowPaymentsPayoutIPN
 );
 
 router.get("/edit-user/:userId", isAdmin, controller.getEditUser);
-
-router.post("/swap", auth, swapCrypto.swapCrypto);
 
 router.post("/send", auth, sendCrypto.sendCrypto);
 

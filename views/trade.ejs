@@ -80,14 +80,11 @@
                       <option value="" disabled selected>
                         -- Choose Currency --
                       </option>
-                      <option value="BTC">Bitcoin (BTC)</option>
                       <option value="ETH">Ethereum (ETH)</option>
-                      <option value="SOL">Solana (SOL)</option>
                       <option value="USDT_TRC20">USDT (TRC20 Network)</option>
-                      <option value="USDT_ERC20">USDT (ERC20 Network)</option>
                       <option value="USDC_ERC20">USDC (ERC20 Network)</option>
-                      <option value="BNB">BNB</option>
-                      <option value="MATIC">Polygon (MATIC)</option>
+                      <option value="TRX">TRON (TRX)</option>
+                      <option value="USDT_ERC20">USDT (ERC20 Network)</option>
                     </select>
                   </div>
 
@@ -168,58 +165,6 @@
         <!-- Remove card-body padding and use list-group-flush for edge-to-edge items -->
         <div class="card-body p-0">
           <ul class="list-group list-group-flush balance-list">
-            <!-- USDT -->
-            <li
-              class="list-group-item d-flex justify-content-between align-items-center px-3"
-            >
-              <div>
-                <i class="fas fa-dollar-sign crypto-icon"></i>
-                <strong>USDT (ERC-20)</strong>
-                <small class="balance-address"
-                  ><%= user.cryptoWallet.USDT %></small
-                >
-              </div>
-              <span class="balance-amount"
-                ><%= user.balances.USDT %><span> USDT</span></span
-              >
-            </li>
-            <!-- USDT -->
-            <li
-              class="list-group-item d-flex justify-content-between align-items-center px-3"
-            >
-              <div>
-                <i class="fas fa-dollar-sign crypto-icon"></i>
-                <!-- Same icon as USDT often used -->
-                <strong>USDC (ERC-20)</strong>
-                <% if (user.cryptoWallet.USDC) { %>
-                <small class="balance-address"
-                  ><%= user.cryptoWallet.USDC %></small
-                >
-                <% } else { %>
-                <small class="balance-address text-muted">No address set</small>
-                <% } %>
-              </div>
-              <!-- Use toFixed(6) or adjust precision as needed -->
-              <span class="balance-amount"
-                ><%= user.balances.USDC %><span> USDC</span></span
-              >
-            </li>
-
-            <!-- BTC -->
-            <li
-              class="list-group-item d-flex justify-content-between align-items-center px-3"
-            >
-              <div>
-                <i class="fab fa-btc crypto-icon"></i>
-                <strong>BTC</strong>
-                <small class="balance-address"
-                  ><%= user.cryptoWallet.BTC %></small
-                >
-              </div>
-              <span class="balance-amount"
-                ><%= user.balances.BTC %><span> BTC</span></span
-              >
-            </li>
             <!-- ETH -->
             <li
               class="list-group-item d-flex justify-content-between align-items-center px-3"
@@ -235,53 +180,71 @@
                 ><%= user.balances.ETH %><span> ETH</span></span
               >
             </li>
-            <!-- BNB -->
+            <!-- USDT -->
             <li
               class="list-group-item d-flex justify-content-between align-items-center px-3"
             >
               <div>
-                <i class="fas fa-cube crypto-icon"></i>
-                <!-- Using generic icon -->
-                <strong>BNB</strong>
+                <i class="fas fa-dollar-sign crypto-icon"></i>
+                <strong>USDT (ERC-20)</strong>
                 <small class="balance-address"
-                  ><%= user.cryptoWallet.BNB %></small
+                  ><%= user.cryptoWallet.USDT_ERC20 %></small
                 >
               </div>
               <span class="balance-amount"
-                ><%= user.balances.BNB %><span> BNB</span></span
+                ><%= user.balances.USDT_ERC20 %><span> USDT</span></span
               >
             </li>
-            <!-- SOL -->
+            <!-- USDT -->
             <li
               class="list-group-item d-flex justify-content-between align-items-center px-3"
             >
               <div>
-                <i class="fas fa-wave-square crypto-icon"></i>
-                <!-- Using generic icon -->
-                <strong>SOL</strong>
+                <i class="fas fa-dollar-sign crypto-icon"></i>
+                <!-- Same icon as USDT often used -->
+                <strong>USDC (ERC-20)</strong>
+                <% if (user.cryptoWallet.USDC_ERC20) { %>
                 <small class="balance-address"
-                  ><%= user.cryptoWallet.SOL %></small
+                  ><%= user.cryptoWallet.USDC_ERC20 %></small
                 >
+                <% } else { %>
+                <small class="balance-address text-muted">No address set</small>
+                <% } %>
               </div>
+              <!-- Use toFixed(6) or adjust precision as needed -->
               <span class="balance-amount"
-                ><%= user.balances.SOL %><span> SOL</span></span
+                ><%= user.balances.USDC_ERC20 %><span> USDC</span></span
               >
             </li>
-            <!-- POLYGON (MATIC) -->
+
+            <!-- USDT (TRC20 on Tron) -->
+
             <li
               class="list-group-item d-flex justify-content-between align-items-center px-3"
             >
               <div>
-                <i class="fas fa-draw-polygon crypto-icon"></i>
-                <!-- Using generic icon -->
-                <strong>MATIC</strong>
-                <!-- Displaying as MATIC -->
+                <i class="fab fa-tumblr-square crypto-icon"></i>
+                <strong>TRX</strong>
                 <small class="balance-address"
-                  ><%= user.cryptoWallet.POLYGON %></small
+                  ><%= user.cryptoWallet.TRX %></small
+                >
+              </div>
+              <span class="balance-amount">
+                <%= user.balances.TRX %><span> TRX</span>
+              </span>
+            </li>
+            <li
+              class="list-group-item d-flex justify-content-between align-items-center px-3"
+            >
+              <div>
+                <i class="fas fa-dollar-sign crypto-icon"></i>
+                <strong>USDT (TRC20)</strong>
+                <small class="balance-address"
+                  ><%= user.cryptoWallet.USDT_TRC20 %></small
                 >
               </div>
               <span class="balance-amount"
-                ><%= user.balances.POLYGON %><span> MATIC</span></span
+                ><%= user.balances.USDT_TRC20 %><span> USDT</span></span
               >
             </li>
           </ul>
@@ -289,69 +252,8 @@
       </div>
 
       <div class="row">
-        <!-- Swap Crypto Card -->
-        <div class="col-lg-6">
-          <div class="card">
-            <div class="card-header">
-              <i class="fas fa-exchange-alt me-2"></i> Swap Crypto
-            </div>
-            <div class="card-body">
-              <form action="/swap" method="POST">
-                <div class="row mb-3">
-                  <div class="col-md-5">
-                    <label for="swapFromCrypto" class="form-label">From</label>
-                    <select
-                      id="swapFromCrypto"
-                      name="fromCrypto"
-                      class="form-select"
-                    >
-                      <% for (const crypto of Object.keys(user.cryptoWallet)) {
-                      %>
-                      <option value="<%= crypto %>"><%= crypto %></option>
-                      <% } %>
-                    </select>
-                  </div>
-                  <div class="col-md-2 text-center align-self-end pb-2">
-                    <i class="fas fa-arrow-right text-muted"></i>
-                  </div>
-                  <div class="col-md-5">
-                    <label for="swapToCrypto" class="form-label">To</label>
-                    <select
-                      id="swapToCrypto"
-                      name="toCrypto"
-                      class="form-select"
-                    >
-                      <!-- Ensure user.cryptoWallet keys match these values if needed -->
-                      <% for (const crypto of ["BTC", "ETH", "USDT", "BNB",
-                      "USDC", "SOL", "MATIC"]) { %>
-                      <option value="<%= crypto %>"><%= crypto %></option>
-                      <% } %>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="mb-3">
-                  <label for="swapAmount" class="form-label"
-                    >Amount to Swap</label
-                  >
-                  <input type="number" id="swapAmount" name="amount"
-                  class="form-control" placeholder="Enter amount" step="any" Use
-                  "any" for crypto precision %> min="0" required />
-                </div>
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                <button
-                  type="submit"
-                  class="btn btn-primary rounded-pill w-100"
-                >
-                  <i class="fas fa-sync-alt"></i> Swap Now
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-
         <!-- Send Crypto Card -->
-        <div class="col-lg-6">
+        <div class="col-lg-12">
           <div class="card">
             <div class="card-header">
               <i class="fas fa-paper-plane me-2"></i> Send Crypto
@@ -392,9 +294,16 @@
                   <label for="sendAmount" class="form-label"
                     >Amount to Send</label
                   >
-                  <input type="number" id="sendAmount" name="amount"
-                  class="form-control" placeholder="Enter amount" step="any" Use
-                  "any" for crypto precision %> min="0" required />
+                  <input
+                    type="number"
+                    id="sendAmount"
+                    name="amount"
+                    class="form-control"
+                    placeholder="Enter amount"
+                    step="any"
+                    min="0"
+                    required
+                  />
                 </div>
 
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>" />

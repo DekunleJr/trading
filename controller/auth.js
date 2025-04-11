@@ -4,12 +4,15 @@ const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const { validationResult } = require("express-validator");
 const { ethers } = require("ethers");
-const bitcoin = require("bitcoinjs-lib");
-const ecc = require("tiny-secp256k1");
-const ECPairFactory = require("ecpair").ECPairFactory;
-const solanaWeb3 = require("@solana/web3.js");
 const User = require("../model/user");
+const TronWeb = require("tronweb");
 const { encryptPrivateKey } = require("../utils/encryption");
+
+const tronWeb = new TronWeb(
+  "https://api.trongrid.io",
+  "https://api.trongrid.io",
+  "https://api.trongrid.io"
+);
 
 const transporter = nodemailer.createTransport({
   host: "smtp.zoho.com",
@@ -59,22 +62,15 @@ exports.postSignup = async (req, res, next) => {
 
   // Ethereum & BNB (Both use same derivation path)
   const ethWallet = hdNode.derivePath("m/44'/60'/0'/0/0");
-  const bnbWallet = hdNode.derivePath("m/44'/60'/0'/0/1");
-  const polygonWallet = hdNode.derivePath("m/44'/60'/0'/0/2");
   const usdcWallet = ethWallet.address;
 
-  // Bitcoin Wallet
-  const ECPair = ECPairFactory(ecc);
-  const btcKeyPair = ECPair.makeRandom();
-  const privateKey = btcKeyPair.toWIF();
-  const { address } = bitcoin.payments.p2pkh({
-    pubkey: Buffer.from(btcKeyPair.publicKey),
-  });
+  // 3. Tron Wallet (for USDT_TRC20)
+  const tronAccount = await tronWeb.createAccount(); // Creates a new random Tron account
+  const tronAddress = tronAccount.address.base58; // Use the base58 address
+  const tronPrivateKey = tronAccount.privateKey;
 
-  // Solana Wallet
-  const solKeypair = solanaWeb3.Keypair.generate();
-  const solPrivateKey = Buffer.from(solKeypair.secretKey).toString("hex");
-  const solAddress = solKeypair.publicKey.toString();
+  // Encrypt Tron Private Key before storing
+  const encryptedTronPrivateKey = encryptPrivateKey(tronPrivateKey);
 
   if (!errors.isEmpty()) {
     return res.status(422).render("signup", {
@@ -100,17 +96,14 @@ exports.postSignup = async (req, res, next) => {
       ref,
       mnemonic,
       cryptoWallet: {
-        BTC: address,
-        ETH: ethWallet.address,
-        BNB: bnbWallet.address,
-        SOL: solAddress,
-        USDT: ethWallet.address,
-        USDC: usdcWallet,
-        POLYGON: polygonWallet.address,
+        ETH: usdcWallet,
+        USDT_ERC20: usdcWallet,
+        USDC_ERC20: usdcWallet,
+        USDT_TRC20: tronAddress,
+        TRX: tronAddress,
       },
       privateKeys: {
-        btc: encryptPrivateKey(privateKey),
-        sol: encryptPrivateKey(solPrivateKey),
+        tron: encryptedTronPrivateKey,
       },
     });
 
@@ -145,17 +138,22 @@ exports.postSignup = async (req, res, next) => {
             <h1>You signed up successfully!</h1>
             <h3>Wallet Addresses</h3>
             <div class="wallet-info">
-                <p><strong>USDT Wallet Address:</strong> ${ethWallet.address}</p>
-                <p><strong>USDC Wallet Address:</strong> ${ethWallet.address}</p>
+              <li><b></b> </li>
+                <p><strong>USDT (ERC20 on Ethereum):</strong> ${
+                  ethWallet.address
+                }</p>
+                <p><strong>USDC (ERC20 on Ethereum):</strong> ${
+                  ethWallet.address
+                }</p>
                 <p><strong>ETH Wallet Address:</strong> ${ethWallet.address}</p>
-                <p><strong>BNB Wallet Address:</strong> ${bnbWallet.address}</p>
+                <p><strong>TRX (Tron Network):</strong> ${tronAddress}</p>
+                <p><strong>USDT (TRC20 on Tron):</strong> ${tronAddress}</p>
                 <p><strong>Passphrase:</strong> ${mnemonic} <span class="note">[Please keep this safe]</span></p>
-                <p><strong>SOL Wallet Address:</strong> ${solAddress}</p>
-                <p><strong>SOL Secret Key:</strong> ${solPrivateKey} <span class="note">[Please keep this safe]</span></p>
-                <p><strong>Bitcoin Wallet Address:</strong> ${address}</p>
-                <p><strong>Bitcoin Secret Key:</strong> ${privateKey} <span class="note">[Please keep this safe]</span></p>
-                <p><strong>POLYGON Wallet Address:</strong> ${polygonWallet.address}</p>
-                <p><strong>Polygon Passphrase:</strong> ${polygonWallet.mnemonic.phrase} <span class="note">[Please keep this safe]</span></p>
+                <p><strong>USDT (TRC20 on Tron) Secret Key:</strong> ${tronPrivateKey} <span class="note">[Please keep this safe]</span></p>
+                <p>You can now <a href="${req.protocol}://${req.get(
+          "host"
+        )}/login">login</a> to your account.
+                </p>
             </div>
         </div>
     </body>
