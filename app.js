@@ -93,6 +93,8 @@ app.get("/favicon.ico", (req, res) => {
   res.status(204).end();
 });
 
+app.set("trust proxy", 1);
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
