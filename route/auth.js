@@ -26,8 +26,7 @@ router.post(
             );
           }
         });
-      })
-      .normalizeEmail(),
+      }),
     check("phone")
       .isMobilePhone()
       .withMessage("Please enter a valid Phone number")
@@ -70,10 +69,7 @@ router.post(
 router.post(
   "/login",
   [
-    check("email")
-      .isEmail()
-      .withMessage("Please enter a valid email")
-      .normalizeEmail(),
+    check("email").isEmail().withMessage("Please enter a valid email"),
     body("password", "Enter atleast 8 characters containing numbers and text")
       .isLength({ min: 8 })
       .trim(),

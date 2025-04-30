@@ -102,7 +102,7 @@ app.use(
     saveUninitialized: false,
     store: store,
     cookie: {
-      secure: true,
+      secure: false,
       httpOnly: true,
       sameSite: "lax",
       maxAge: 12 * 60 * 60 * 1000,
