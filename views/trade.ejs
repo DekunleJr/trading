@@ -42,7 +42,7 @@
                 %>
               </h4>
             </div>
-            <div class="col-md-4 mb-3 mb-md-0">
+            <div class="col-md-4 mb-md-0">
               <h6 class="text-muted">Expected Payout (x1.5)</h6>
               <h4 class="fw-bold">
                 <%= user.depositCurrency %> <%= (user.investmentAmount *
@@ -54,6 +54,21 @@
               <h4 class="fw-bold"><%= user.payoutDate %></h4>
             </div>
           </div>
+        </div>
+        <div class="card-footer text-muted">
+          <i class="fas fa-info-circle me-2"></i>
+          <small
+            >We only accept crypto deposit at the moment. If you would like to
+            invest with other payment methods please contact our support
+            <a
+              href="mailto:support@tradereturn.online"
+              class="text-decoration-none"
+            >
+              (support@tradereturn.online)
+            </a>
+            so we can assist you in completing your deposit with your preferred
+            payment method.</small
+          >
         </div>
       </div>
 
